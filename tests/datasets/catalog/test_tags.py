@@ -27,6 +27,71 @@ def _source() -> MemorySource:
     return MemorySource(pl.DataFrame({"text": ["one", "two"]}))
 
 
+def test_list_tags_returns_each_node_with_its_parent_path(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    repository.create_tag("Language")
+    repository.create_tag("Trendyol Cases")
+    repository.create_tag("Turkish", parent="Language")
+    repository.create_tag("Summarization", parent="Trendyol Cases")
+
+    assert [(tag.path, tag.parent) for tag in repository.list_tags()] == [
+        ("Language", None),
+        ("Language/Turkish", "Language"),
+        ("Trendyol Cases", None),
+        ("Trendyol Cases/Summarization", "Trendyol Cases"),
+    ]
+
+
+def test_ensure_path_creates_a_chain_and_reuses_existing_nodes(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+
+    leaf, created = repository.ensure_path(
+        ["Trendyol Cases", "Summarization", "Review Summarization"]
+    )
+    again, created_again = repository.ensure_path(
+        ["Trendyol Cases", "Summarization", "Review Summarization"]
+    )
+    sibling, sibling_created = repository.ensure_path(
+        ["Trendyol Cases", "Summarization", "Chat Summarization"]
+    )
+
+    assert created is True
+    assert leaf.path == "Trendyol Cases/Summarization/Review Summarization"
+    assert leaf.parent == "Trendyol Cases/Summarization"
+    assert created_again is False
+    assert again == leaf
+    assert sibling_created is True
+    assert sibling.path == "Trendyol Cases/Summarization/Chat Summarization"
+    assert [tag.path for tag in repository.list_tags()] == [
+        "Trendyol Cases",
+        "Trendyol Cases/Summarization",
+        "Trendyol Cases/Summarization/Chat Summarization",
+        "Trendyol Cases/Summarization/Review Summarization",
+    ]
+
+
+def test_ensure_paths_rolls_back_every_path_when_one_segment_is_rejected(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+
+    with pytest.raises(ValueError, match="/"):
+        repository.ensure_paths(
+            [["Trendyol Cases", "Summarization"], ["Trendyol Cases", "bad/name"]]
+        )
+
+    assert repository.list_tags() == []
+
+
+def test_ensure_path_rolls_back_when_a_later_segment_is_rejected(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+
+    with pytest.raises(ValueError, match="empty"):
+        repository.ensure_path([])
+    with pytest.raises(ValueError, match="/"):
+        repository.ensure_path(["Trendyol Cases", "bad/name"])
+
+    assert repository.list_tags() == []
+
+
 def test_tag_tree_keeps_sibling_names_unique_and_child_names_reusable(tmp_path: Path) -> None:
     repository = _repository(tmp_path)
     repository.create_tag("Trendyol Cases")

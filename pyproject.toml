@@ -7,13 +7,16 @@ requires-python = ">=3.12"
 license = "Apache-2.0"
 dependencies = [
     "datasets>=3.0",
+    "fastapi>=0.162.0",
     "huggingface-hub>=0.26",
     "polars>=1.0",
     "pydantic>=2.0",
+    "uvicorn>=0.54.0",
 ]
 
 [dependency-groups]
 dev = [
+    "httpx>=0.28.1",
     "pytest>=8.0",
     "ruff>=0.8",
     "ty>=0.0.1",

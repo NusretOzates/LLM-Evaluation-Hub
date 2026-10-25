@@ -63,6 +63,7 @@ class DatasetRecord(BaseModel):
 
     id: str
     name: str
+    created_at: datetime
     processor_id: str
     source_type: str
     repo_id: str | None
@@ -114,6 +115,28 @@ class DatasetRepository:
         """Delete a tag that has no children and no dataset links."""
         with self._connection() as connection:
             TagStore(connection).delete(path)
+
+    def list_tags(self) -> list[Tag]:
+        """Return every tag node, ordered by path."""
+        with self._connection() as connection:
+            return TagStore(connection).list_tags()
+
+    def ensure_path(self, segments: Sequence[str]) -> tuple[Tag, bool]:
+        """Create missing nodes on one path. Return the leaf and whether any node was new."""
+        with self._connection() as connection:
+            return _ensure_segments(TagStore(connection), segments)
+
+    def ensure_paths(self, paths: Sequence[Sequence[str]]) -> bool:
+        """Create every missing node on these paths in one transaction."""
+        if len(paths) == 0:
+            raise ValueError("tag path must not be empty")
+        with self._connection() as connection:
+            store = TagStore(connection)
+            created_any = False
+            for segments in paths:
+                _, created = _ensure_segments(store, segments)
+                created_any = created_any or created
+            return created_any
 
     def register(  # noqa: PLR0913
         self,
@@ -202,10 +225,24 @@ class DatasetRepository:
         record = self.get(name)
         return pl.scan_parquet(self._root / record.parquet_path).collect()
 
-    def examples(self, name: str) -> list[ProcessedExample]:
-        """Parse the snapshot back into conversation records."""
+    def examples(
+        self,
+        name: str,
+        *,
+        offset: int = 0,
+        limit: int | None = None,
+    ) -> list[ProcessedExample]:
+        """Parse a page of the snapshot back into conversation records."""
+        if offset < 0:
+            raise ValueError("offset must be at least 0")
+        if limit is not None and limit < 1:
+            raise ValueError("limit must be at least 1")
         record = self.get(name)
-        frame = self.rows(name)
+        scan = pl.scan_parquet(self._root / record.parquet_path)
+        if limit is None and offset == 0:
+            frame = scan.collect()
+        else:
+            frame = scan.slice(offset, limit).collect()
         examples: list[ProcessedExample] = []
         for row in frame.iter_rows(named=True):
             conversation = [decode_message(item) for item in json.loads(row["conversation"])]
@@ -310,6 +347,7 @@ class DatasetRepository:
         return DatasetRecord(
             id=row["id"],
             name=row["name"],
+            created_at=datetime.fromisoformat(row["created_at"]),
             processor_id=row["processor_id"],
             source_type=row["source_type"],
             repo_id=row["repo_id"],
@@ -341,6 +379,19 @@ class DatasetRepository:
         """Report whether a dataset name is already stored."""
         row = connection.execute("SELECT 1 FROM datasets WHERE name = ?", (name,)).fetchone()
         return row is not None
+
+
+def _ensure_segments(store: TagStore, segments: Sequence[str]) -> tuple[Tag, bool]:
+    """Insert any missing segment and return the leaf plus whether a node was new."""
+    if len(segments) == 0:
+        raise ValueError("tag path must not be empty")
+    leaf, created_any = store.ensure(segments[0], None)
+    parent = leaf.path
+    for name in segments[1:]:
+        leaf, created = store.ensure(name, parent)
+        parent = leaf.path
+        created_any = created_any or created
+    return leaf, created_any
 
 
 __all__ = ["DatasetRecord", "DatasetRepository"]

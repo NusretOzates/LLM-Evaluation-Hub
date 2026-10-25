@@ -75,6 +75,7 @@ def test_register_stores_counts_segments_and_round_trips_examples(tmp_path: Path
     frame = repository.rows("cases")
     examples = repository.examples("cases")
 
+    assert record.created_at.tzinfo is not None
     assert record.rows_loaded == 4
     assert record.rows_kept == 3
     assert record.rows_dropped == 1
@@ -97,6 +98,19 @@ def test_register_stores_counts_segments_and_round_trips_examples(tmp_path: Path
     assert examples[2].expected_output is None
     assert examples[0].extras == {"rubric": "Use the policy."}
     assert json.loads(frame.get_column("expected_output")[0]) == "refund"
+
+
+def test_examples_page_returns_the_requested_slice(tmp_path: Path) -> None:
+    repository = DatasetRepository(tmp_path / "catalog")
+    _register(repository)
+
+    page = repository.examples("cases", offset=1, limit=1)
+    assert [example.conversation[1].content for example in page] == ["beta"]
+    assert repository.examples("cases", offset=10, limit=1) == []
+    with pytest.raises(ValueError, match="offset"):
+        repository.examples("cases", offset=-1)
+    with pytest.raises(ValueError, match="limit"):
+        repository.examples("cases", limit=0)
 
 
 def test_register_without_segments_has_the_fixed_columns(tmp_path: Path) -> None:

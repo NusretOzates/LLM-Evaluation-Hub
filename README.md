@@ -42,3 +42,29 @@ repo.list_datasets(tag="Trendyol Cases")
 A segment is a string column on each row, such as `language` or `difficulty`. A dataset tag still describes the dataset as a whole. `HF_TOKEN` is read from the environment when the source is constructed without a token, and the token is not written into the catalog.
 
 A single-input row is stored as a conversation. When the processor does not start with a system message, an empty system message is inserted.
+
+## Run the API
+
+```bash
+LLM_EVAL_CATALOG=data/catalog uv run uvicorn llm_evaluation_hub.api.asgi:app --factory
+```
+
+`LLM_EVAL_CATALOG` selects the catalog directory. When it is unset, the app uses `data/catalog`.
+
+`GET /tags` and `POST /tags` use the same nested dict. A post creates any missing nodes:
+
+```json
+{
+  "Trendyol Cases": {
+    "children": {
+      "Summarization": {
+        "children": {
+          "Review Summarization": {}
+        }
+      }
+    }
+  }
+}
+```
+
+The response fills `path` on each node. `GET /datasets` returns dataset metadata, and `GET /datasets/{name}/examples` returns a page of stored rows.

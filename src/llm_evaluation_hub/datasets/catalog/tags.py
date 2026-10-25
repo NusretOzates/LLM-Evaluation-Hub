@@ -32,14 +32,7 @@ class TagStore:
 
     def create(self, name: str, parent: str | None = None) -> Tag:
         """Insert a tag. The parent path must already exist."""
-        if name == "" or "/" in name:
-            raise ValueError("tag name must not be empty or contain '/'")
-        parent_id = None
-        if parent is None:
-            path = name
-        else:
-            parent_id = self.require(parent)["id"]
-            path = f"{parent}/{name}"
+        parent_id, path = self._location(name, parent)
         try:
             self._connection.execute(
                 "INSERT INTO tags (id, name, parent_id, path) VALUES (?, ?, ?, ?)",
@@ -48,6 +41,48 @@ class TagStore:
         except sqlite3.IntegrityError as error:
             raise DuplicateTagError(path) from error
         return Tag(name=name, parent=parent, path=path)
+
+    def ensure(self, name: str, parent: str | None = None) -> tuple[Tag, bool]:
+        """Return a tag node, inserting it when the path is absent."""
+        parent_id, path = self._location(name, parent)
+        if self._path_exists(path):
+            return Tag(name=name, parent=parent, path=path), False
+        try:
+            self._connection.execute(
+                "INSERT INTO tags (id, name, parent_id, path) VALUES (?, ?, ?, ?)",
+                (str(uuid.uuid4()), name, parent_id, path),
+            )
+        except sqlite3.IntegrityError:
+            if not self._path_exists(path):
+                raise
+            return Tag(name=name, parent=parent, path=path), False
+        return Tag(name=name, parent=parent, path=path), True
+
+    def list_tags(self) -> list[Tag]:
+        """Return every tag, ordered by path."""
+        rows = self._connection.execute(
+            """
+            SELECT child.name AS name, child.path AS path, parent.path AS parent
+            FROM tags AS child
+            LEFT JOIN tags AS parent ON parent.id = child.parent_id
+            ORDER BY child.path
+            """
+        ).fetchall()
+        return [Tag(name=row["name"], parent=row["parent"], path=row["path"]) for row in rows]
+
+    def _location(self, name: str, parent: str | None) -> tuple[str | None, str]:
+        """Validate a segment and return the parent id and stored path."""
+        if name == "" or "/" in name:
+            raise ValueError("tag name must not be empty or contain '/'")
+        if parent is None:
+            return None, name
+        parent_id = self.require(parent)["id"]
+        return str(parent_id), f"{parent}/{name}"
+
+    def _path_exists(self, path: str) -> bool:
+        """Report whether a tag path is already stored."""
+        row = self._connection.execute("SELECT 1 FROM tags WHERE path = ?", (path,)).fetchone()
+        return row is not None
 
     def require(self, path: str) -> sqlite3.Row:
         """Return the tag row or raise when the path is missing."""
