@@ -6,7 +6,7 @@ from collections.abc import Sequence
 
 from pydantic import BaseModel, ConfigDict
 
-from llm_evaluation_hub.datasets.catalog.errors import (
+from llm_evaluation_hub.core.datasets.catalog.errors import (
     DuplicateTagError,
     TagInUseError,
     UnknownTagError,

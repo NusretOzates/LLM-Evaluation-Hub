@@ -6,9 +6,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from llm_evaluation_hub.datasets.catalog import DatasetRepository
-from llm_evaluation_hub.datasets.records import ProcessedExample
-from llm_evaluation_hub.datasets.sources.hf import HfDatasetSource
+from llm_evaluation_hub.core.datasets.catalog import DatasetRepository
+from llm_evaluation_hub.core.datasets.records import ProcessedExample
+from llm_evaluation_hub.core.datasets.sources.hf import HfDatasetSource
 
 
 def _processor(row: dict[str, object]) -> ProcessedExample:
@@ -50,10 +50,10 @@ def test_hf_source_uses_the_environment_token_and_a_split_prefix(
         return Dataset.from_list([{"text": "Merhaba", "label": "greeting", "language": "tr"}])
 
     monkeypatch.setattr(
-        "llm_evaluation_hub.datasets.sources.hf.HfApi.dataset_info",
+        "llm_evaluation_hub.core.datasets.sources.hf.HfApi.dataset_info",
         fake_dataset_info,
     )
-    monkeypatch.setattr("llm_evaluation_hub.datasets.sources.hf.load_dataset", fake_load)
+    monkeypatch.setattr("llm_evaluation_hub.core.datasets.sources.hf.load_dataset", fake_load)
     source = HfDatasetSource("org/cases", "train")
 
     frame = source.read(limit=1)
@@ -102,10 +102,10 @@ def test_hf_source_loads_a_local_fixture_and_stores_the_stubbed_sha(
         return load_dataset("json", data_files=str(fixture), split="train")
 
     monkeypatch.setattr(
-        "llm_evaluation_hub.datasets.sources.hf.HfApi.dataset_info",
+        "llm_evaluation_hub.core.datasets.sources.hf.HfApi.dataset_info",
         fake_dataset_info,
     )
-    monkeypatch.setattr("llm_evaluation_hub.datasets.sources.hf.load_dataset", fake_load)
+    monkeypatch.setattr("llm_evaluation_hub.core.datasets.sources.hf.load_dataset", fake_load)
 
     source = HfDatasetSource(
         "org/cases",

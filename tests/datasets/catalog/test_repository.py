@@ -7,14 +7,14 @@ import polars as pl
 import pytest
 from tests.datasets.catalog.memory import MemorySource
 
-from llm_evaluation_hub.datasets.catalog import (
+from llm_evaluation_hub.core.datasets.catalog import (
     DatasetRepository,
     DuplicateDatasetError,
     UnknownDatasetError,
     UnknownTagError,
 )
-from llm_evaluation_hub.datasets.processing import RowProcessingError
-from llm_evaluation_hub.datasets.records import JsonValue, ProcessedExample
+from llm_evaluation_hub.core.datasets.processing import RowProcessingError
+from llm_evaluation_hub.core.datasets.records import JsonValue, ProcessedExample
 
 
 def _source() -> MemorySource:

@@ -13,15 +13,18 @@ from pathlib import Path
 import polars as pl
 from pydantic import BaseModel, ConfigDict
 
-from llm_evaluation_hub.datasets.catalog.errors import DuplicateDatasetError, UnknownDatasetError
-from llm_evaluation_hub.datasets.catalog.tags import Tag, TagStore
-from llm_evaluation_hub.datasets.processing import (
+from llm_evaluation_hub.core.datasets.catalog.errors import (
+    DuplicateDatasetError,
+    UnknownDatasetError,
+)
+from llm_evaluation_hub.core.datasets.catalog.tags import Tag, TagStore
+from llm_evaluation_hub.core.datasets.processing import (
     RowProcessor,
     process_rows,
     validate_segment_declaration,
 )
-from llm_evaluation_hub.datasets.records import ProcessedExample, decode_message
-from llm_evaluation_hub.datasets.sources import DatasetSource, SourceDescriptor
+from llm_evaluation_hub.core.datasets.records import ProcessedExample, decode_message
+from llm_evaluation_hub.core.datasets.sources import DatasetSource, SourceDescriptor
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS tags (

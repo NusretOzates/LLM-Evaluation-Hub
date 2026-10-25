@@ -6,7 +6,7 @@ import math
 import pytest
 from pydantic import ValidationError
 
-from llm_evaluation_hub.datasets.records import (
+from llm_evaluation_hub.core.datasets.records import (
     AssistantMessage,
     ProcessedExample,
     UserMessage,

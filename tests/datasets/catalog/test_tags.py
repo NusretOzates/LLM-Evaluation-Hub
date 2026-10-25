@@ -6,13 +6,13 @@ import polars as pl
 import pytest
 from tests.datasets.catalog.memory import MemorySource
 
-from llm_evaluation_hub.datasets.catalog import (
+from llm_evaluation_hub.core.datasets.catalog import (
     DatasetRepository,
     DuplicateTagError,
     TagInUseError,
     UnknownTagError,
 )
-from llm_evaluation_hub.datasets.records import ProcessedExample
+from llm_evaluation_hub.core.datasets.records import ProcessedExample
 
 
 def _repository(tmp_path: Path) -> DatasetRepository:

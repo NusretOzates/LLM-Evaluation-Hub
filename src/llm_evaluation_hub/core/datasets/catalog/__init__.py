@@ -1,6 +1,6 @@
 """Dataset catalog: snapshots, tag links, and reads."""
 
-from llm_evaluation_hub.datasets.catalog.errors import (
+from llm_evaluation_hub.core.datasets.catalog.errors import (
     CatalogError,
     DuplicateDatasetError,
     DuplicateTagError,
@@ -8,8 +8,8 @@ from llm_evaluation_hub.datasets.catalog.errors import (
     UnknownDatasetError,
     UnknownTagError,
 )
-from llm_evaluation_hub.datasets.catalog.repository import DatasetRecord, DatasetRepository
-from llm_evaluation_hub.datasets.catalog.tags import Tag
+from llm_evaluation_hub.core.datasets.catalog.repository import DatasetRecord, DatasetRepository
+from llm_evaluation_hub.core.datasets.catalog.tags import Tag
 
 __all__ = [
     "CatalogError",

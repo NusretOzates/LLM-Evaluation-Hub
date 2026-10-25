@@ -6,8 +6,8 @@ import polars as pl
 from fastapi.testclient import TestClient
 from tests.datasets.catalog.memory import MemorySource
 
-from llm_evaluation_hub.datasets.catalog import DatasetRepository
-from llm_evaluation_hub.datasets.records import ProcessedExample
+from llm_evaluation_hub.core.datasets.catalog import DatasetRepository
+from llm_evaluation_hub.core.datasets.records import ProcessedExample
 
 
 def _processor(row: dict[str, object]) -> ProcessedExample | None:

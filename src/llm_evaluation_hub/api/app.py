@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from llm_evaluation_hub.api.routes import router
-from llm_evaluation_hub.datasets.catalog import (
+from llm_evaluation_hub.core.datasets.catalog import (
     DatasetRepository,
     UnknownDatasetError,
     UnknownTagError,

@@ -7,7 +7,7 @@ A single hub for evaluation of LLMs. This slice is a local dataset catalog: it s
 ```python
 from pathlib import Path
 
-from llm_evaluation_hub.datasets import DatasetRepository, HfDatasetSource, ProcessedExample
+from llm_evaluation_hub.core.datasets import DatasetRepository, HfDatasetSource, ProcessedExample
 
 repo = DatasetRepository(Path("data/catalog"))
 repo.create_tag("Trendyol Cases")

@@ -4,8 +4,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from llm_evaluation_hub.datasets.catalog import DatasetRecord, Tag
-from llm_evaluation_hub.datasets.records import ProcessedExample
+from llm_evaluation_hub.core.datasets.catalog import DatasetRecord, Tag
+from llm_evaluation_hub.core.datasets.records import ProcessedExample
 
 
 class TagBranch(BaseModel):

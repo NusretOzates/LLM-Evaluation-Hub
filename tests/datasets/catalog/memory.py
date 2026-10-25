@@ -2,7 +2,7 @@
 
 import polars as pl
 
-from llm_evaluation_hub.datasets.sources.protocol import SourceDescriptor
+from llm_evaluation_hub.core.datasets.sources.protocol import SourceDescriptor
 
 
 class MemorySource:

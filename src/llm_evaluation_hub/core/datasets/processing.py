@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import polars as pl
 from pydantic import ValidationError
 
-from llm_evaluation_hub.datasets.records import (
+from llm_evaluation_hub.core.datasets.records import (
     ProcessedExample,
     encode_conversation,
     encode_expected_output,

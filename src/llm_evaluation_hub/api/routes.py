@@ -16,7 +16,7 @@ from llm_evaluation_hub.api.schemas import (
     normalize_tag_forest,
     tag_tree,
 )
-from llm_evaluation_hub.datasets.catalog import DatasetRepository
+from llm_evaluation_hub.core.datasets.catalog import DatasetRepository
 
 router = APIRouter()
 

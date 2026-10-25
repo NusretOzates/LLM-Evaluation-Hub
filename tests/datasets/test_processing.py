@@ -3,12 +3,12 @@
 import polars as pl
 import pytest
 
-from llm_evaluation_hub.datasets.processing import (
+from llm_evaluation_hub.core.datasets.processing import (
     EmptyDatasetError,
     RowProcessingError,
     process_rows,
 )
-from llm_evaluation_hub.datasets.records import ProcessedExample
+from llm_evaluation_hub.core.datasets.records import ProcessedExample
 
 
 def _frame() -> pl.DataFrame:
