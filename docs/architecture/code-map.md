@@ -1,9 +1,9 @@
 ---
 type: Reference
 title: Code map
-description: Where to change catalog registration, HTTP reads, and the workbench.
+description: Where to change catalog registration, HTTP reads, the workbench, and the Docker stack.
 tags: [architecture]
-generated: { by: human:nusret, at: 2026-10-25T22:04:00+03:00 }
+generated: { by: human:nusret, at: 2026-10-25T22:25:00+03:00 }
 status: stable
 ---
 
@@ -19,6 +19,8 @@ Start here when a behavior change needs a file. Each row is one capability. Path
 | Hugging Face source | `llm_evaluation_hub.core.datasets:HfDatasetSource` | `src/llm_evaluation_hub/core/datasets/sources/hf.py:HfDatasetSource` | `tests/datasets/sources/test_hf.py` |
 | Catalog HTTP API | `llm_evaluation_hub.api:create_app` | `src/llm_evaluation_hub/api/app.py:create_app`, `src/llm_evaluation_hub/api/routes.py`, `src/llm_evaluation_hub/api/schemas.py` | `tests/api/test_dataset_routes.py`, `tests/api/test_tag_routes.py` |
 | API process | `llm_evaluation_hub.api.asgi:app` | `src/llm_evaluation_hub/api/asgi.py:app` | `tests/api/` |
+| Starter catalog | `llm_evaluation_hub.api.seed:ensure_starter_catalog` | `src/llm_evaluation_hub/api/seed.py:ensure_starter_catalog`, `src/llm_evaluation_hub/api/asgi.py:app` | `tests/api/test_seed.py` |
+| Docker stack | `compose.yaml` | `Dockerfile`, `web/Dockerfile`, `web/docker-entrypoint.sh`, `web/nginx.conf.template`, `docker/seed/` | none |
 | Workbench shell and tags | route `/datasets` | `web/app/shell.tsx:Shell`, `web/app/routes/datasets.tsx`, `web/app/catalog.ts` | none |
 | Row inspector | route `/datasets/:name` | `web/app/routes/dataset.tsx:DatasetPage` | none |
 | Workbench visual design | `web/app/app.css` | `web/app/app.css`, `web/app/root.tsx` font imports | none |

@@ -30,6 +30,7 @@ This bundle documents the local dataset catalog, the HTTP API that reads it, and
 
 ## Run it
 
-- [Run the API and workbench](how-to/run-locally.md) starts both processes.
+- [Run the API and workbench](how-to/run-locally.md) starts both processes on the host.
+- [Run with Docker](how-to/run-with-docker.md) starts them in Compose. The catalog volume survives restarts, and demo data is copied only when `LLM_EVAL_SEED` is set.
 - [Register a dataset](how-to/register-a-dataset.md) writes a snapshot from Python.
-- [Runtime configuration](configuration/runtime.md) lists `LLM_EVAL_CATALOG`, `HF_TOKEN`, and the `/api` proxy.
+- [Runtime configuration](configuration/runtime.md) lists `LLM_EVAL_CATALOG`, `LLM_EVAL_SEED`, `HF_TOKEN`, and the `/api` proxies.

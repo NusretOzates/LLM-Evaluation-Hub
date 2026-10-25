@@ -1,22 +1,21 @@
-FROM node:24-alpine AS development-dependencies-env
-COPY . /app
+FROM node:24-alpine AS build
+
 WORKDIR /app
+COPY package.json package-lock.json ./
 RUN npm ci
-
-FROM node:24-alpine AS production-dependencies-env
-COPY ./package.json package-lock.json /app/
-WORKDIR /app
-RUN npm ci --omit=dev
-
-FROM node:24-alpine AS build-env
-COPY . /app/
-COPY --from=development-dependencies-env /app/node_modules /app/node_modules
-WORKDIR /app
+COPY . .
 RUN npm run build
 
-FROM node:24-alpine
-COPY ./package.json package-lock.json /app/
-COPY --from=production-dependencies-env /app/node_modules /app/node_modules
-COPY --from=build-env /app/build /app/build
-WORKDIR /app
-CMD ["npm", "run", "start"]
+FROM nginx:1.28-alpine
+
+ENV API_UPSTREAM=http://api:8000
+
+COPY nginx.conf.template /etc/nginx/templates/default.conf.template
+COPY docker-entrypoint.sh /docker-entrypoint-wait.sh
+COPY --from=build /app/build/client /usr/share/nginx/html
+
+RUN chmod +x /docker-entrypoint-wait.sh
+
+ENTRYPOINT ["/docker-entrypoint-wait.sh"]
+CMD ["nginx", "-g", "daemon off;"]
+EXPOSE 80

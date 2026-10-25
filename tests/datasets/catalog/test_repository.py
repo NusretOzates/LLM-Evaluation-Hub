@@ -1,6 +1,7 @@
 """Dataset registration and snapshot reads."""
 
 import json
+import sqlite3
 from pathlib import Path
 
 import polars as pl
@@ -205,6 +206,20 @@ def test_insert_failure_removes_the_parquet_snapshot(tmp_path: Path) -> None:
     with pytest.raises(UnknownDatasetError):
         repository.get("cases")
     assert list(root.rglob("*.parquet")) == []
+
+
+def test_catalog_reopens_in_wal_mode(tmp_path: Path) -> None:
+    root = tmp_path / "catalog"
+    DatasetRepository(root)
+
+    connection = sqlite3.connect(root / "catalog.sqlite")
+    try:
+        mode = connection.execute("PRAGMA journal_mode").fetchone()
+    finally:
+        connection.close()
+
+    assert mode is not None
+    assert mode[0] == "wal"
 
 
 def test_unknown_tag_fails_before_a_snapshot_is_written(tmp_path: Path) -> None:

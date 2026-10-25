@@ -13,3 +13,5 @@ cd web && npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
 The site is at `http://127.0.0.1:5173/datasets`. Page behavior is in [docs/modules/workbench.md](../docs/modules/workbench.md).
+
+`docker compose up --build` from the repository root serves the same workbench at `http://127.0.0.1:8080/datasets`. That path is in [docs/how-to/run-with-docker.md](../docs/how-to/run-with-docker.md).

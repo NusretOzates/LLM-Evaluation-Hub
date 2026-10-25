@@ -3,13 +3,13 @@ type: Reference
 title: Catalog API
 description: HTTP operations for tags, dataset metadata, and pages of stored rows.
 tags: [api]
-generated: { by: human:nusret, at: 2026-10-25T19:00:00+03:00 }
+generated: { by: human:nusret, at: 2026-10-25T22:25:00+03:00 }
 status: stable
 ---
 
 # Catalog API
 
-`create_app(catalog_root)` in `src/llm_evaluation_hub/api/app.py:create_app` serves one `DatasetRepository`. The uvicorn factory `llm_evaluation_hub.api.asgi:app` passes `LLM_EVAL_CATALOG` or `data/catalog`. Responses are JSON. CORS allows every origin, method, and header. There is no authentication.
+`create_app(catalog_root)` in `src/llm_evaluation_hub/api/app.py:create_app` serves one `DatasetRepository`. The uvicorn factory `llm_evaluation_hub.api.asgi:app` passes `LLM_EVAL_CATALOG` or `data/catalog`. When `LLM_EVAL_SEED` is set, the factory publishes that directory into the catalog root before serving. [Runtime configuration](../configuration/runtime.md) states when the copy runs. Responses are JSON. CORS allows every origin, method, and header. There is no authentication.
 
 The API does not register datasets and does not return `parquet_path`. Snapshot writes stay on `DatasetRepository.register`.
 

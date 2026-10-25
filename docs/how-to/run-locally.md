@@ -3,13 +3,13 @@ type: Playbook
 title: Run the API and workbench
 description: Install dependencies, start the catalog API, and open the workbench against that catalog.
 tags: [operations]
-generated: { by: human:nusret, at: 2026-10-25T19:00:00+03:00 }
+generated: { by: human:nusret, at: 2026-10-25T22:32:00+03:00 }
 status: stable
 ---
 
 # Run the API and workbench
 
-Use this when you want to browse a catalog that is already on disk. To put a dataset into that catalog, follow [Register a dataset](register-a-dataset.md) first. Field meanings are in [Runtime configuration](../configuration/runtime.md).
+Use this when you want to browse a catalog that is already on disk. To put a dataset into that catalog, follow [Register a dataset](register-a-dataset.md) first. Field meanings are in [Runtime configuration](../configuration/runtime.md). To run both processes in Docker, follow [Run with Docker](run-with-docker.md). Demo data stays unloaded unless `LLM_EVAL_SEED` is set.
 
 ## Steps
 

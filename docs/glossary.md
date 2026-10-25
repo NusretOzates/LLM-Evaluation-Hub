@@ -3,7 +3,7 @@ type: Reference
 title: Glossary
 description: Names shared by the catalog, the API, and the workbench.
 tags: [glossary]
-generated: { by: human:nusret, at: 2026-10-25T19:00:00+03:00 }
+generated: { by: human:nusret, at: 2026-10-25T22:25:00+03:00 }
 status: stable
 ---
 
@@ -12,6 +12,7 @@ status: stable
 | Term | Meaning |
 | --- | --- |
 | Catalog | The directory that contains `catalog.sqlite` and `datasets/<id>/rows.parquet`. |
+| Starter catalog | The demo snapshot in `docker/seed`. `LLM_EVAL_SEED` copies it into a catalog that has no `catalog.sqlite`. |
 | Dataset | One named snapshot plus its metadata and direct tag links. |
 | Snapshot | The Parquet file written by one successful `register` call. It is not updated in place. |
 | Source row | One row of the frame returned by `DatasetSource.read`, before the processor drops it. |

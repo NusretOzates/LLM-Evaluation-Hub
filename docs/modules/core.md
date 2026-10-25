@@ -3,7 +3,7 @@ type: Module
 title: Core library
 description: Dataset sources, the row processor, conversation records, and the local catalog.
 tags: [core]
-generated: { by: human:nusret, at: 2026-10-25T19:00:00+03:00 }
+generated: { by: human:nusret, at: 2026-10-25T22:25:00+03:00 }
 status: stable
 ---
 
@@ -36,7 +36,7 @@ A source implements `DatasetSource` in `src/llm_evaluation_hub/core/datasets/sou
 
 ## Repository
 
-`DatasetRepository(root)` creates `root` and `catalog.sqlite` when they are missing. Methods that change or read the index:
+`DatasetRepository(root)` creates `root` and `catalog.sqlite` when they are missing. Each connection opens that file in WAL mode and sets a 5 second busy timeout. After the process is killed, the next open recovers committed writes. Methods that change or read the index:
 
 | Method | Effect |
 | --- | --- |

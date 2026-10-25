@@ -1,0 +1,50 @@
+name: llm-evaluation-hub
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      LLM_EVAL_CATALOG: /var/lib/llm-eval/catalog
+      LLM_EVAL_SEED: ${LLM_EVAL_SEED-}
+    volumes:
+      - catalog:/var/lib/llm-eval/catalog
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/datasets', timeout=3)",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 20s
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    environment:
+      API_UPSTREAM: http://api:8000
+    ports:
+      - "127.0.0.1:8080:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+      start_period: 5s
+    init: true
+    restart: unless-stopped
+
+volumes:
+  catalog:

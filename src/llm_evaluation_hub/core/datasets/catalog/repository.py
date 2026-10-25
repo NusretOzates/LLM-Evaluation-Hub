@@ -266,6 +266,9 @@ class DatasetRepository:
         self._root.mkdir(parents=True, exist_ok=True)
         connection = sqlite3.connect(self._root / "catalog.sqlite")
         connection.row_factory = sqlite3.Row
+        # WAL plus a busy timeout lets the next process reopen after a kill.
+        connection.execute("PRAGMA busy_timeout = 5000")
+        connection.execute("PRAGMA journal_mode = WAL").fetchone()
         connection.execute("PRAGMA foreign_keys = ON")
         try:
             connection.executescript(_SCHEMA)

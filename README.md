@@ -60,3 +60,11 @@ cd web && npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
 Open `http://127.0.0.1:5173/datasets`. When `LLM_EVAL_CATALOG` is unset, the API uses `data/catalog`. Details are in [docs/how-to/run-locally.md](docs/how-to/run-locally.md).
+
+## Run with Docker
+
+```bash
+docker compose up --build
+```
+
+Open `http://127.0.0.1:8080/datasets`. The catalog volume starts empty and survives restarts. Set `LLM_EVAL_SEED=/opt/llm-eval/seed` to copy the demo catalog into an empty volume. The steps are in [docs/how-to/run-with-docker.md](docs/how-to/run-with-docker.md).
