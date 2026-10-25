@@ -1,0 +1,28 @@
+---
+type: Reference
+title: Code map
+description: Where to change catalog registration, HTTP reads, and the workbench.
+tags: [architecture]
+generated: { by: human:nusret, at: 2026-10-25T22:04:00+03:00 }
+status: stable
+---
+
+# Code map
+
+Start here when a behavior change needs a file. Each row is one capability. Paths are relative to the repository root.
+
+| Capability | Entry point | Key files | Tests |
+| --- | --- | --- | --- |
+| Register a snapshot | `llm_evaluation_hub.core.datasets:DatasetRepository.register` | `src/llm_evaluation_hub/core/datasets/catalog/repository.py:DatasetRepository.register`, `src/llm_evaluation_hub/core/datasets/processing.py:process_rows` | `tests/datasets/catalog/test_repository.py`, `tests/datasets/test_processing.py` |
+| Tag tree and dataset links | `DatasetRepository.create_tag`, `add_tags`, `remove_tags`, `delete_tag` | `src/llm_evaluation_hub/core/datasets/catalog/tags.py:TagStore`, `repository.py:DatasetRepository` | `tests/datasets/catalog/test_tags.py` |
+| Conversation record | `llm_evaluation_hub.core.datasets:ProcessedExample` | `src/llm_evaluation_hub/core/datasets/records.py:ProcessedExample` | `tests/datasets/test_records.py` |
+| Hugging Face source | `llm_evaluation_hub.core.datasets:HfDatasetSource` | `src/llm_evaluation_hub/core/datasets/sources/hf.py:HfDatasetSource` | `tests/datasets/sources/test_hf.py` |
+| Catalog HTTP API | `llm_evaluation_hub.api:create_app` | `src/llm_evaluation_hub/api/app.py:create_app`, `src/llm_evaluation_hub/api/routes.py`, `src/llm_evaluation_hub/api/schemas.py` | `tests/api/test_dataset_routes.py`, `tests/api/test_tag_routes.py` |
+| API process | `llm_evaluation_hub.api.asgi:app` | `src/llm_evaluation_hub/api/asgi.py:app` | `tests/api/` |
+| Workbench shell and tags | route `/datasets` | `web/app/shell.tsx:Shell`, `web/app/routes/datasets.tsx`, `web/app/catalog.ts` | none |
+| Row inspector | route `/datasets/:name` | `web/app/routes/dataset.tsx:DatasetPage` | none |
+| Workbench visual design | `web/app/app.css` | `web/app/app.css`, `web/app/root.tsx` font imports | none |
+
+Public Python imports for registration are `DatasetRepository`, `HfDatasetSource`, `DatasetSource`, and `ProcessedExample` from `llm_evaluation_hub.core.datasets`. Catalog errors are exported from `llm_evaluation_hub.core.datasets.catalog`, not from that package root. `create_app` is the public API constructor. The uvicorn factory is `llm_evaluation_hub.api.asgi:app`.
+
+The workbench has no automated test. `cd web && npm run typecheck` checks the TypeScript routes. API and core behavior are covered by `uv run pytest`.

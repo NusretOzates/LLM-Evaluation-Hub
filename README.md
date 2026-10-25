@@ -1,6 +1,18 @@
-# LLM-Evaluation-Hub
+# LLM Evaluation Hub
 
-A single hub for evaluation of LLMs. This slice is a local dataset catalog: it snapshots a Hugging Face dataset into conversation records, stores row segments as columns, and organizes datasets with a tag tree.
+A local catalog for LLM evaluation datasets. It snapshots a tabular source into conversation rows, stores segment values as columns, and groups datasets with a tag tree. A small HTTP API and a workbench browse that catalog. Registration stays in Python.
+
+Documentation: [docs/index.md](docs/index.md).
+
+## Setup
+
+Python 3.12 or newer. From the repository root:
+
+```bash
+uv sync
+```
+
+The workbench also needs Node and `cd web && npm install`.
 
 ## Register a dataset
 
@@ -12,59 +24,39 @@ from llm_evaluation_hub.core.datasets import DatasetRepository, HfDatasetSource,
 repo = DatasetRepository(Path("data/catalog"))
 repo.create_tag("Trendyol Cases")
 repo.create_tag("classification", parent="Trendyol Cases")
-repo.create_tag("Language")
-repo.create_tag("Turkish", parent="Language")
 
 
-def to_conversation(row: dict) -> ProcessedExample:
+def to_conversation(row: dict) -> ProcessedExample | None:
+    text = row["text"]
+    if not isinstance(text, str) or text == "":
+        return None
     return ProcessedExample(
-        conversation=[{"role": "user", "content": row["text"]}],
+        conversation=[{"role": "user", "content": text}],
         expected_output=row["label"],
-        segments={"language": row["language"], "difficulty": row["difficulty"]},
+        segments={"language": str(row["language"])},
     )
 
 
 repo.register(
-    "trendyol-cases-multilingual",
+    "trendyol-cases",
     HfDatasetSource("org/cases", "train", revision="main"),
     to_conversation,
     processor_id="cases.to_conversation",
-    tags=["Trendyol Cases/classification", "Language/Turkish"],
-    segments=["language", "difficulty"],
+    tags=["Trendyol Cases/classification"],
+    segments=["language"],
 )
-
-repo.rows("trendyol-cases-multilingual")
-repo.list_datasets(tag="Trendyol Cases")
 ```
 
-`create_tag` adds a node to the tree and does not attach it to a dataset. Pass tag paths to `register`, or call `add_tags` and `remove_tags` later. Listing a parent tag includes datasets linked to tags under it.
+`HF_TOKEN` is used when the source is constructed without a token. The token is not written into the catalog. The full steps, checks, and failures are in [docs/how-to/register-a-dataset.md](docs/how-to/register-a-dataset.md).
 
-A segment is a string column on each row, such as `language` or `difficulty`. A dataset tag still describes the dataset as a whole. `HF_TOKEN` is read from the environment when the source is constructed without a token, and the token is not written into the catalog.
-
-A single-input row is stored as a conversation. When the processor does not start with a system message, an empty system message is inserted.
-
-## Run the API
+## Run the API and workbench
 
 ```bash
 LLM_EVAL_CATALOG=data/catalog uv run uvicorn llm_evaluation_hub.api.asgi:app --factory
 ```
 
-`LLM_EVAL_CATALOG` selects the catalog directory. When it is unset, the app uses `data/catalog`.
-
-`GET /tags` and `POST /tags` use the same nested dict. A post creates any missing nodes:
-
-```json
-{
-  "Trendyol Cases": {
-    "children": {
-      "Summarization": {
-        "children": {
-          "Review Summarization": {}
-        }
-      }
-    }
-  }
-}
+```bash
+cd web && npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-The response fills `path` on each node. `GET /datasets` returns dataset metadata, and `GET /datasets/{name}/examples` returns a page of stored rows.
+Open `http://127.0.0.1:5173/datasets`. When `LLM_EVAL_CATALOG` is unset, the API uses `data/catalog`. Details are in [docs/how-to/run-locally.md](docs/how-to/run-locally.md).
