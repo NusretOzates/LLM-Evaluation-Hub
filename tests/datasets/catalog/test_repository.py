@@ -89,6 +89,7 @@ def test_register_stores_counts_segments_and_round_trips_examples(tmp_path: Path
         "conversation",
         "expected_output",
         "extras",
+        "tools",
         "language",
         "difficulty",
     ]
@@ -129,6 +130,7 @@ def test_register_without_segments_has_the_fixed_columns(tmp_path: Path) -> None
         "conversation",
         "expected_output",
         "extras",
+        "tools",
     ]
 
 
@@ -237,3 +239,146 @@ def test_unknown_tag_fails_before_a_snapshot_is_written(tmp_path: Path) -> None:
         )
 
     assert list(root.rglob("*.parquet")) == []
+
+
+def test_list_batches_tag_queries_and_reads_run_no_ddl(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = DatasetRepository(tmp_path / "catalog")
+    repo.create_tag("Group")
+    for index in range(12):
+        repo.register(
+            f"cases-{index}",
+            _source(),
+            _processor,
+            processor_id="tests.batch",
+            tags=["Group"],
+            segments=["language", "difficulty"],
+        )
+    original_connect = sqlite3.connect
+    statements: list[str] = []
+
+    def traced_connect(database: str | Path) -> sqlite3.Connection:
+        connection = original_connect(database)
+        connection.set_trace_callback(statements.append)
+        return connection
+
+    monkeypatch.setattr(sqlite3, "connect", traced_connect)
+    records = repo.list_datasets()
+    assert len(records) == 12
+    assert all(record.tags == ["Group"] for record in records)
+    assert len([sql for sql in statements if sql.startswith("SELECT")]) == 2
+    assert not any("CREATE TABLE" in sql or "journal_mode" in sql for sql in statements)
+
+
+def test_storage_diagnostics_and_backup_restore(tmp_path: Path) -> None:
+    from scripts.catalog_backup import backup_catalog
+
+    root = tmp_path / "catalog"
+    repo = DatasetRepository(root)
+    _register(repo)
+    record = repo.get("cases")
+    (root / "unreferenced.parquet").write_bytes(b"orphan")
+    assert repo.inspect_storage() == {"missing": [], "unreferenced": ["unreferenced.parquet"]}
+    backup_catalog(root, tmp_path / "backup")
+    backup_catalog(tmp_path / "backup", tmp_path / "restored")
+    restored = DatasetRepository(tmp_path / "restored")
+    assert restored.get("cases") == record
+    assert restored.examples("cases") == repo.examples("cases")
+    assert restored.inspect_storage() == {"missing": [], "unreferenced": []}
+    (root / record.parquet_path).unlink()
+    assert repo.inspect_storage()["missing"] == [record.parquet_path]
+    with pytest.raises(FileExistsError):
+        backup_catalog(root, tmp_path / "backup")
+
+
+def test_future_schema_is_rejected_without_rewriting_version(tmp_path: Path) -> None:
+    root = tmp_path / "catalog"
+    DatasetRepository(root)
+    with sqlite3.connect(root / "catalog.sqlite") as connection:
+        connection.execute("PRAGMA user_version = 99")
+    with pytest.raises(RuntimeError, match="unsupported catalog schema"):
+        DatasetRepository(root)
+    with sqlite3.connect(root / "catalog.sqlite") as connection:
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 99
+
+
+def test_killed_registration_is_reported_without_exposing_dataset(tmp_path: Path) -> None:
+    import subprocess
+    import sys
+
+    root = tmp_path / "catalog"
+    code = (
+        "import os, sys, polars as pl; from pathlib import Path; "
+        "from llm_evaluation_hub.core.datasets import DatasetRepository, ProcessedExample; "
+        "from tests.datasets.catalog.memory import MemorySource; "
+        "repo = DatasetRepository(Path(sys.argv[1])); "
+        "repo._insert = lambda stored: os._exit(24); "
+        "repo.register('killed', MemorySource(pl.DataFrame({'text': ['row']})), "
+        "lambda row: ProcessedExample(conversation=[{'role': 'user', 'content': 'row'}]), "
+        "processor_id='tests.kill')"
+    )
+    result = subprocess.run([sys.executable, "-c", code, str(root)], check=False, timeout=30)
+    assert result.returncode == 24
+    repo = DatasetRepository(root)
+    assert repo.list_datasets() == []
+    diagnostics = repo.inspect_storage()
+    assert diagnostics["missing"] == []
+    assert len(diagnostics["unreferenced"]) == 1
+    assert (root / diagnostics["unreferenced"][0]).is_file()
+
+
+def test_backup_rejects_parent_components_without_writing_outside_stage(tmp_path: Path) -> None:
+    from scripts.catalog_backup import backup_catalog
+
+    root = tmp_path / "catalog"
+    repo = DatasetRepository(root)
+    _register(repo)
+    record = repo.get("cases")
+    # This resolves within source but would escape a backup stage on another parent.
+    with sqlite3.connect(root / "catalog.sqlite") as connection:
+        connection.execute(
+            "UPDATE datasets SET parquet_path = ?", (f"../catalog/{record.parquet_path}",)
+        )
+    backups = tmp_path / "backups"
+    backups.mkdir()
+    sentinel = backups / "catalog" / record.parquet_path
+    sentinel.parent.mkdir(parents=True)
+    sentinel.write_bytes(b"keep")
+    with pytest.raises(ValueError, match="unsafe snapshot path"):
+        backup_catalog(root, backups / "new")
+    assert sentinel.read_bytes() == b"keep"
+    assert not (backups / "new").exists()
+
+
+def test_concurrent_registration_reports_duplicate_without_orphans(tmp_path: Path) -> None:
+    import subprocess
+    import sys
+
+    root = tmp_path / "catalog"
+    code = """
+import sys
+from pathlib import Path
+import polars as pl
+from tests.datasets.catalog.memory import MemorySource
+from llm_evaluation_hub.core.datasets import DatasetRepository, ProcessedExample
+from llm_evaluation_hub.core.datasets.catalog import DuplicateDatasetError
+repo = DatasetRepository(Path(sys.argv[1]))
+try:
+    repo.register('same', MemorySource(pl.DataFrame({'text': ['row']})),
+                  lambda row: ProcessedExample(conversation=[{'role': 'user', 'content': 'row'}]),
+                  processor_id='tests.race')
+    print('created')
+except DuplicateDatasetError:
+    print('duplicate')
+"""
+    processes = [
+        subprocess.Popen([sys.executable, "-c", code, str(root)], stdout=subprocess.PIPE, text=True)
+        for _ in range(2)
+    ]
+    outcomes = [process.communicate(timeout=30)[0].strip() for process in processes]
+    assert all(process.returncode == 0 for process in processes)
+    assert sorted(outcomes) == ["created", "duplicate"]
+    repo = DatasetRepository(root)
+    assert len(repo.list_datasets()) == 1
+    assert repo.inspect_storage() == {"missing": [], "unreferenced": []}

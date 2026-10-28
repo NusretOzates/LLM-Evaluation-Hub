@@ -161,3 +161,61 @@ def test_segment_values_are_strings_and_keys_are_column_names() -> None:
             conversation=[{"role": "user", "content": "Merhaba"}],
             segments={"conversation": "tr"},
         )
+
+
+def test_tools_preserve_order_and_nested_schemas_without_call_matching() -> None:
+    payload = {
+        "conversation": [
+            {
+                "role": "assistant",
+                "tool_calls": [
+                    {"id": "old-call", "function": {"name": "historical", "arguments": {}}}
+                ],
+            }
+        ],
+        "tools": [
+            {
+                "type": "function",
+                "function": {
+                    "name": "lookup",
+                    "description": "Unicode: İade",
+                    "strict": True,
+                    "parameters": {
+                        "$defs": {"key": {"type": "string"}},
+                        "properties": {"id": {"$ref": "#/$defs/key"}},
+                    },
+                },
+            }
+        ],
+    }
+    example = ProcessedExample.model_validate(payload)
+    assert example.model_dump(mode="json", exclude_none=True)["tools"] == payload["tools"]
+    assert (
+        ProcessedExample.model_validate({"conversation": [{"role": "user", "content": "x"}]}).tools
+        == []
+    )
+
+
+@pytest.mark.parametrize(
+    "tools",
+    [
+        None,
+        [{"type": "function", "function": {"name": "", "parameters": {}}}],
+        [{"type": "function", "function": {"name": "x", "parameters": []}}],
+        [{"type": "function", "function": {"name": "x", "parameters": {"bad": math.inf}}}],
+        [{"type": "function", "function": {"name": "x", "parameters": {1: "bad"}}}],
+        [{"type": "function", "function": {"name": "x", "parameters": {"bad": object()}}}],
+        [{"type": "function", "function": {"name": "x", "parameters": {}, "extra": 1}}],
+        [{"type": "function", "function": {"name": "x", "parameters": {}, "strict": "true"}}],
+        [{"type": "function", "function": {"name": "x", "parameters": {}, "description": None}}],
+        [{"type": "function", "function": {"name": "x", "parameters": {}}}] * 2,
+    ],
+)
+def test_malformed_available_tool_definitions_fail(tools: object) -> None:
+    with pytest.raises(ValidationError):
+        ProcessedExample.model_validate(
+            {
+                "conversation": [{"role": "user", "content": "x"}],
+                "tools": tools,
+            }
+        )

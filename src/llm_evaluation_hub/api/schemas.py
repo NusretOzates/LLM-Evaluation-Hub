@@ -8,6 +8,10 @@ from llm_evaluation_hub.core.datasets.catalog import DatasetRecord, Tag
 from llm_evaluation_hub.core.datasets.records import ProcessedExample
 
 
+class InvalidRequestError(ValueError):
+    """A semantically invalid client request, distinct from stored-data failures."""
+
+
 class TagBranch(BaseModel):
     """One node in a tag forest sent by a client."""
 
@@ -71,7 +75,7 @@ class ExamplePage(BaseModel):
 def normalize_tag_forest(forest: dict[str, TagBranch]) -> dict[str, TagBranch]:
     """Strip tag names and reject an empty forest or an illegal name."""
     if not forest:
-        raise ValueError("tag forest must not be empty")
+        raise InvalidRequestError("tag forest must not be empty")
     return _normalize_level(forest)
 
 
@@ -84,7 +88,7 @@ def leaf_paths(forest: dict[str, TagBranch], prefix: list[str] | None = None) ->
         segments = [*segments_so_far, name]
         expected = "/".join(segments)
         if branch.path is not None and branch.path != expected:
-            raise ValueError("tag path does not match its place in the tree")
+            raise InvalidRequestError("tag path does not match its place in the tree")
         if branch.children:
             paths.extend(leaf_paths(branch.children, segments))
         else:
@@ -107,9 +111,9 @@ def _normalize_level(forest: dict[str, TagBranch]) -> dict[str, TagBranch]:
     for raw_name, branch in forest.items():
         name = raw_name.strip()
         if name == "" or "/" in name:
-            raise ValueError("tag name must not be empty or contain '/'")
+            raise InvalidRequestError("tag name must not be empty or contain '/'")
         if name in normalized:
-            raise ValueError(f"duplicate tag name: {name}")
+            raise InvalidRequestError(f"duplicate tag name: {name}")
         normalized[name] = TagBranch(path=branch.path, children=_normalize_level(branch.children))
     return normalized
 
@@ -129,7 +133,9 @@ def tag_tree(tags: list[Tag]) -> dict[str, TagNode]:
 
 def dataset_view(record: DatasetRecord) -> DatasetView:
     """Project a catalog record without its storage path."""
-    return DatasetView.model_validate(record.model_dump(exclude={"parquet_path"}))
+    return DatasetView.model_validate(
+        record.model_dump(exclude={"parquet_path", "snapshot_format_version"})
+    )
 
 
 TagBranch.model_rebuild()

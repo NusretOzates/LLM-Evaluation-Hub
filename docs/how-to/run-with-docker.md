@@ -3,7 +3,7 @@ type: Playbook
 title: Run with Docker
 description: Start the API and workbench with Compose. Demo data is copied only when requested.
 tags: [operations]
-generated: { by: human:nusret, at: 2026-10-25T22:32:00+03:00 }
+generated: { by: process:codex-refactor, at: 2026-10-26T13:56:10+03:00 }
 status: stable
 ---
 
@@ -21,7 +21,15 @@ docker compose up --build
 
 2. Open `http://127.0.0.1:8080/datasets`.
 
-The workbench proxies `/api` to the API service and strips that prefix. The API listens inside the Compose network. Port `8080` on the host is the workbench.
+The workbench proxies `/api` to the API service and strips that prefix. The API listens inside the Compose network. The workbench binds port `8080` on the host by default.
+
+If port `8080` is already in use, select a free host port and open the corresponding URL:
+
+```bash
+LLM_EVAL_WEB_PORT=8081 docker compose up --build
+```
+
+Open `http://127.0.0.1:8081/datasets`. Keep `LLM_EVAL_WEB_PORT` set to the same value for subsequent `docker compose up` commands.
 
 The first start creates an empty catalog when the volume has no `catalog.sqlite`. A later start keeps that volume, including tag edits. The workbench starts listening after the API answers `GET /datasets`.
 
@@ -37,12 +45,14 @@ docker compose down
 
 The demo snapshot is about 70 KB. The API image stores it at `/opt/llm-eval/seed`. Set `LLM_EVAL_SEED` to that path and use a volume that has no `catalog.sqlite`:
 
+Deleting the volume permanently removes registered datasets and tag edits. [Back up the catalog](backup-and-recover.md) first and use these reset commands only for a disposable catalog.
+
 ```bash
 docker compose down -v
 LLM_EVAL_SEED=/opt/llm-eval/seed docker compose up --build
 ```
 
-The copy publishes the database file last. A start that dies before that file exists tries the copy again. A start that finds `catalog.sqlite` keeps the volume, so `docker compose down -v` is what clears an existing catalog before a new copy.
+The copy publishes the database file last. A start that dies before that file exists resumes a completed staging publication or starts a new private stage without deleting unknown files. A start that finds `catalog.sqlite` keeps the volume, so `docker compose down -v` is what clears an existing catalog before a new copy.
 
 The demo catalog has these datasets:
 
@@ -53,6 +63,8 @@ The demo catalog has these datasets:
 - `returns-faq-draft`
 
 Leave `LLM_EVAL_SEED` unset, delete the volume, and start again to return to an empty catalog:
+
+Deleting the volume permanently removes registered datasets and tag edits. [Back up the catalog](backup-and-recover.md) first and use these reset commands only for a disposable catalog.
 
 ```bash
 docker compose down -v

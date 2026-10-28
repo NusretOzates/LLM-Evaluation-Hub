@@ -1,33 +1,69 @@
 """FastAPI application for the dataset catalog."""
 
 import logging
+import sqlite3
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from polars.exceptions import PolarsError
 
+from llm_evaluation_hub.api.import_routes import import_validation_error
+from llm_evaluation_hub.api.import_routes import router as import_router
 from llm_evaluation_hub.api.routes import router
+from llm_evaluation_hub.api.schemas import InvalidRequestError
 from llm_evaluation_hub.core.datasets.catalog import (
     DatasetRepository,
     UnknownDatasetError,
     UnknownTagError,
 )
+from llm_evaluation_hub.imports.jobs import ImportSupervisor
+from llm_evaluation_hub.imports.previews import PreviewService
+from llm_evaluation_hub.imports.sources import SourceAdapter
 
 logger = logging.getLogger(__name__)
 
 
-def create_app(catalog_root: Path) -> FastAPI:
+def create_app(
+    catalog_root: Path,
+    *,
+    allowed_origins: tuple[str, ...] = (),
+    source_adapter: SourceAdapter | None = None,
+) -> FastAPI:
     """Serve the catalog stored at `catalog_root`."""
-    application = FastAPI(title="LLM Evaluation Hub")
+    supervisor = ImportSupervisor(catalog_root, source_adapter=source_adapter)
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
+        del app
+        supervisor.start()
+        try:
+            yield
+        finally:
+            supervisor.stop()
+
+    application = FastAPI(title="LLM Evaluation Hub", lifespan=lifespan)
+    application.state.import_supervisor = supervisor
+    application.state.preview_service = PreviewService(supervisor.store, supervisor)
+
+    @application.exception_handler(RequestValidationError)
+    def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+        return import_validation_error(request, exc)
+
     application.state.repository = DatasetRepository(catalog_root)
-    application.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    if allowed_origins:
+        application.add_middleware(
+            CORSMiddleware,
+            allow_origins=list(allowed_origins),
+            allow_methods=["GET", "POST", "DELETE"],
+            allow_headers=["Content-Type"],
+        )
     application.include_router(router)
+    application.include_router(import_router)
     _register_errors(application)
     logger.info("Serving catalog at %s", catalog_root)
     return application
@@ -46,7 +82,22 @@ def _register_errors(application: FastAPI) -> None:
         del request  # FastAPI supplies the request to every exception handler.
         return JSONResponse(status_code=404, content={"detail": str(exc)})
 
-    @application.exception_handler(ValueError)
-    def invalid_value(request: Request, exc: ValueError) -> JSONResponse:
+    @application.exception_handler(InvalidRequestError)
+    def invalid_value(request: Request, exc: InvalidRequestError) -> JSONResponse:
         del request  # FastAPI supplies the request to every exception handler.
         return JSONResponse(status_code=422, content={"detail": str(exc)})
+
+    def storage_failure(request: Request, exc: Exception) -> JSONResponse:
+        # Never include validation payloads or raw conversation data in diagnostics.
+        logger.error(
+            "Catalog storage failure: %s %s (%s)",
+            request.method,
+            request.url.path,
+            type(exc).__name__,
+        )
+        return JSONResponse(
+            status_code=500, content={"detail": "The catalog storage could not be read."}
+        )
+
+    for error in (ValueError, sqlite3.Error, OSError, PolarsError):
+        application.add_exception_handler(error, storage_failure)

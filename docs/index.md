@@ -4,7 +4,7 @@ okf_version: "0.2"
 
 # LLM Evaluation Hub documentation
 
-This bundle documents the local dataset catalog, the HTTP API that reads it, and the workbench that browses it. Registration stays in Python. The repository does not run evaluations, train models, or serve model inference.
+This bundle documents the local dataset catalog, the HTTP API, and the workbench. Register datasets with the Python library or import them from the workbench. The repository does not run evaluations, train models, or serve model inference.
 
 | Directory | Role |
 | --- | --- |
@@ -32,5 +32,11 @@ This bundle documents the local dataset catalog, the HTTP API that reads it, and
 
 - [Run the API and workbench](how-to/run-locally.md) starts both processes on the host.
 - [Run with Docker](how-to/run-with-docker.md) starts them in Compose. The catalog volume survives restarts, and demo data is copied only when `LLM_EVAL_SEED` is set.
+- [Import a dataset in the workbench](how-to/import-a-dataset.md) samples a Hugging Face source, previews a processor, and submits a durable import.
 - [Register a dataset](how-to/register-a-dataset.md) writes a snapshot from Python.
 - [Runtime configuration](configuration/runtime.md) lists `LLM_EVAL_CATALOG`, `LLM_EVAL_SEED`, `HF_TOKEN`, and the `/api` proxies.
+
+## Contribute and recover
+
+- [Develop and test](how-to/develop-and-test.md) gives locked setup, quality commands, synthetic browser tests and transport generation.
+- [Back up and recover](how-to/backup-and-recover.md) preserves metadata and snapshots and explains concurrency, failed publication and restore checks.

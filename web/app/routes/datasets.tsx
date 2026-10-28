@@ -1,8 +1,11 @@
-import { Database, X } from "lucide-react";
-import { Link } from "react-router";
+import { Database, Plus, X } from "lucide-react";
+import { Link, useRouteLoaderData } from "react-router";
 
-import { CatalogError, createTags, listDatasets, tagForest, type Dataset } from "../catalog";
+import { CatalogError, createTags, flattenTags, tagForest, type Dataset } from "../catalog";
 import { CatalogAlert, type TagActionData } from "../shell";
+import type { clientLoader as rootLoader } from "../root";
+import { datasetsUnder } from "../shared/catalog-view";
+import { formatCount, formatDate } from "../shared/format";
 import type { Route } from "./+types/datasets";
 
 export function meta() {
@@ -11,7 +14,7 @@ export function meta() {
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   const tag = new URL(request.url).searchParams.get("tag");
-  return { tag, datasets: await listDatasets(tag) };
+  return { tag };
 }
 
 export async function clientAction({ request }: Route.ClientActionArgs): Promise<TagActionData> {
@@ -31,7 +34,13 @@ export async function clientAction({ request }: Route.ClientActionArgs): Promise
 }
 
 export default function Datasets({ loaderData }: Route.ComponentProps) {
-  const { tag, datasets } = loaderData;
+  const { tag } = loaderData;
+  const catalog = useRouteLoaderData<typeof rootLoader>("root");
+  if (catalog === undefined) throw new CatalogError("The catalog could not be loaded.", 500);
+  if (tag && !flattenTags(catalog.tags).some((node) => node.path === tag)) {
+    return <CatalogAlert error={new CatalogError(`Unknown tag: ${tag}`, 404)} />;
+  }
+  const datasets = datasetsUnder(catalog.datasets, tag);
   return (
     <div className="page">
       <header className="topbar">
@@ -46,6 +55,15 @@ export default function Datasets({ loaderData }: Route.ComponentProps) {
               </Link>
             </span>
           )}
+        </div>
+        <div className="topbar-actions">
+          <Link className="button-ghost button-small" to="/dataset-imports">
+            Import jobs
+          </Link>
+          <Link className="button-ghost button-small" to="/dataset-imports/new">
+            <Plus aria-hidden="true" size={13} />
+            Add dataset
+          </Link>
         </div>
       </header>
       {datasets.length === 0 ? <EmptyDatasets tag={tag} /> : <DatasetTable datasets={datasets} />}
@@ -90,7 +108,7 @@ function DatasetTable({ datasets }: { datasets: Dataset[] }) {
           {datasets.map((dataset) => (
             <tr key={dataset.id}>
               <th scope="row">
-                <Link className="row-link" to={`/datasets/${encodeURIComponent(dataset.name)}`}>
+                <Link className="row-link" to={`/datasets/${encodeURIComponent(dataset.id)}`}>
                   {dataset.name}
                 </Link>
                 <span className="cell-sub mono">{dataset.processor_id}</span>
@@ -135,7 +153,14 @@ function EmptyDatasets({ tag }: { tag: string | null }) {
       <div className="empty-state">
         <Database aria-hidden="true" size={20} strokeWidth={1.5} />
         <h2>No datasets yet</h2>
-        <p>Datasets are registered from Python. Each one appears here with its row counts and tags.</p>
+        <p>Import a dataset from Hugging Face or register one from Python.</p>
+        <Link className="button-ghost" to="/dataset-imports/new">
+          <Plus aria-hidden="true" size={13} />
+          Add dataset
+        </Link>
+        <Link className="button-ghost" to="/dataset-imports">
+          View import jobs
+        </Link>
         <pre className="mono">{`repo.register("name", source, processor, processor_id="...")`}</pre>
       </div>
     );
@@ -161,14 +186,4 @@ function sourceDetail(dataset: Dataset): string {
     dataset.revision === null ? null : `@${dataset.revision}`,
   ].filter((part): part is string => part !== null && part !== "");
   return parts.length === 0 ? dataset.source_type : parts.join(" · ");
-}
-
-export function formatCount(value: number): string {
-  return new Intl.NumberFormat("en").format(value);
-}
-
-export function formatDate(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toISOString().slice(0, 10);
 }

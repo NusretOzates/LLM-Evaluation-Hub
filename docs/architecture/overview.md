@@ -3,7 +3,7 @@ type: Reference
 title: Architecture
 description: How a source becomes a Parquet snapshot and how the workbench reads it through the catalog API.
 tags: [architecture]
-generated: { by: human:nusret, at: 2026-10-25T19:00:00+03:00 }
+generated: { by: process:codex-refactor, at: 2026-10-26T13:56:10+03:00 }
 status: stable
 ---
 
@@ -70,3 +70,5 @@ A tag has at most one parent. A dataset links to many tags, and a tag labels man
 | Workbench | React Router dev server or static build | Pages at `/datasets` and `/datasets/:name` |
 
 The API process and a registration script can open the same catalog directory. SQLite commits one connection at a time. The workbench does not take a lock of its own.
+
+Initialization and seed publication share a Linux kernel lock, while ordinary connections perform only connection settings and transactions. Metadata list reads batch tag links. Workbench routes share root catalog data and use immutable IDs for new links. [Backup and recover](../how-to/backup-and-recover.md) defines the SQLite/Parquet transaction boundary and the supported filesystem/durability scope.

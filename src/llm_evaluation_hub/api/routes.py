@@ -91,3 +91,32 @@ def list_examples(
         limit=limit,
         examples=catalog.examples(name, offset=offset, limit=limit),
     )
+
+
+@router.get("/dataset-ids/{dataset_id}")
+def get_dataset_by_id(dataset_id: str, catalog: Catalog) -> DatasetView:
+    """Return metadata by immutable ID. Name-based endpoints remain compatible."""
+    return dataset_view(catalog.get_by_id(dataset_id))
+
+
+@router.post("/dataset-ids/{dataset_id}/tags")
+def add_tags_by_id(dataset_id: str, body: TagPaths, catalog: Catalog) -> DatasetView:
+    """Link existing tags using a dataset's immutable identity."""
+    return dataset_view(catalog.add_tags(catalog.get_by_id(dataset_id).name, body.paths))
+
+
+@router.delete("/dataset-ids/{dataset_id}/tags")
+def remove_tags_by_id(dataset_id: str, body: TagPaths, catalog: Catalog) -> DatasetView:
+    """Unlink existing tags using a dataset's immutable identity."""
+    return dataset_view(catalog.remove_tags(catalog.get_by_id(dataset_id).name, body.paths))
+
+
+@router.get("/dataset-ids/{dataset_id}/examples")
+def examples_by_id(
+    dataset_id: str,
+    catalog: Catalog,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> ExamplePage:
+    """Return a snapshot page by immutable ID."""
+    return list_examples(catalog.get_by_id(dataset_id).name, catalog, offset, limit)

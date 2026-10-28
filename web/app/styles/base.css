@@ -1,0 +1,110 @@
+:root {
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", monospace;
+
+  --gray-0: oklch(100% 0 0);
+  --gray-1: oklch(97.6% 0.003 250);
+  --gray-2: oklch(94.8% 0.004 250);
+  --gray-3: oklch(91% 0.005 250);
+  --gray-4: oklch(86% 0.006 250);
+  --gray-6: oklch(62% 0.01 250);
+  --gray-7: oklch(50% 0.012 250);
+  --gray-9: oklch(30% 0.014 250);
+  --gray-10: oklch(21% 0.014 250);
+
+  --accent: oklch(48% 0.12 195);
+  --accent-hover: oklch(43% 0.12 195);
+  --accent-tint: oklch(48% 0.12 195 / 0.1);
+  --danger: oklch(52% 0.17 25);
+
+  --text: var(--gray-10);
+  --text-2: var(--gray-7);
+  --text-3: var(--gray-6);
+  --line: var(--gray-3);
+  --line-strong: var(--gray-4);
+
+  --radius: 6px;
+  --sidebar: 248px;
+  --aside: 300px;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+
+  color-scheme: light;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  overflow: hidden;
+  background: var(--gray-0);
+  color: var(--text);
+  font: 400 14px / 1.5 var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "tnum";
+}
+
+h1,
+h2,
+p,
+pre,
+dl,
+dd,
+ul {
+  margin: 0;
+}
+
+ul,
+ol {
+  padding: 0;
+  list-style: none;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.muted {
+  color: var(--text-2);
+}
+
+.hint {
+  color: var(--text-3);
+  font-size: 12.5px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

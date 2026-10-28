@@ -3,6 +3,7 @@ import "@fontsource/ibm-plex-mono/500.css";
 import "@fontsource/ibm-plex-sans/400.css";
 import "@fontsource/ibm-plex-sans/500.css";
 import "@fontsource/ibm-plex-sans/600.css";
+import type { ShouldRevalidateFunctionArgs } from "react-router";
 import type { ReactNode } from "react";
 import { isRouteErrorResponse, Links, Meta, Scripts, ScrollRestoration } from "react-router";
 
@@ -15,8 +16,8 @@ export function meta() {
   return [{ title: "Evaluation hub" }];
 }
 
-export async function clientLoader() {
-  const [tags, datasets] = await Promise.all([listTags(), listDatasets(null)]);
+export async function clientLoader({ request }: Route.ClientLoaderArgs) {
+  const [tags, datasets] = await Promise.all([listTags(request.signal), listDatasets(null, request.signal)]);
   return { tags, datasets };
 }
 
@@ -25,12 +26,7 @@ export function shouldRevalidate({
   defaultShouldRevalidate,
   formMethod,
   nextUrl,
-}: {
-  currentUrl: URL;
-  defaultShouldRevalidate: boolean;
-  formMethod?: string;
-  nextUrl: URL;
-}) {
+}: ShouldRevalidateFunctionArgs) {
   if (formMethod !== undefined || currentUrl.pathname !== nextUrl.pathname) return defaultShouldRevalidate;
   return false;
 }

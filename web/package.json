@@ -6,9 +6,19 @@
     "build": "react-router build",
     "dev": "react-router dev",
     "preview": "vite preview --host 127.0.0.1",
-    "typecheck": "react-router typegen && tsc"
+    "typecheck": "react-router typegen && tsc",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "test:e2e": "npm run build && playwright test",
+    "lint": "biome lint app tests e2e *.ts",
+    "format": "biome format --write app tests e2e *.ts",
+    "format:check": "biome format app tests e2e *.ts"
   },
   "dependencies": {
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/lang-python": "^6.2.1",
+    "@codemirror/language": "^6.13.1",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.15",
     "@fontsource/ibm-plex-mono": "^5.3.0",
     "@fontsource/ibm-plex-sans": "^5.3.0",
     "@react-router/node": "^8.5.0",
@@ -20,11 +30,17 @@
     "react-router": "^8.5.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.6.3",
+    "@playwright/test": "^1.64.1",
     "@react-router/dev": "^8.5.0",
     "@types/node": "^22",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "vite": "^8.0.3"
+  },
+  "engines": {
+    "node": ">=22.22.0"
   }
 }

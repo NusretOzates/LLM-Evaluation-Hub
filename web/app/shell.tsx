@@ -1,8 +1,10 @@
-import { Database, PanelLeftClose, PanelLeftOpen, Plus, Tags } from "lucide-react";
-import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { Database, FilePlus2, PanelLeftClose, PanelLeftOpen, Plus, Tags } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, Outlet, useFetcher, useLocation, useNavigation, useSearchParams } from "react-router";
 
 import type { Dataset, TagNode } from "./catalog";
+import { useShortcut, useStoredFlag } from "./shared/browser";
+import { subtreeCounts } from "./shared/catalog-view";
 
 export type TagActionData = { error: string } | { created: true };
 
@@ -42,6 +44,10 @@ export function Shell({ datasets, tags }: { datasets: Dataset[]; tags: Record<st
             <Database aria-hidden="true" size={15} strokeWidth={1.75} />
             <span className="nav-label">Datasets</span>
             <span className="nav-count mono">{datasets.length}</span>
+          </NavLink>{" "}
+          <NavLink className="nav-link" title={collapsed ? "Dataset imports" : undefined} to="/dataset-imports">
+            <FilePlus2 aria-hidden="true" size={15} strokeWidth={1.75} />
+            <span className="nav-label">Imports</span>
           </NavLink>
         </nav>
         {collapsed ? (
@@ -68,39 +74,6 @@ export function Shell({ datasets, tags }: { datasets: Dataset[]; tags: Record<st
   );
 }
 
-export function useStoredFlag(key: string, initial: boolean): [boolean, Dispatch<SetStateAction<boolean>>] {
-  const [value, setValue] = useState(() => {
-    if (typeof window === "undefined") return initial;
-    const stored = window.localStorage.getItem(key);
-    return stored === null ? initial : stored === "true";
-  });
-  useEffect(() => {
-    window.localStorage.setItem(key, String(value));
-  }, [key, value]);
-  return [value, setValue];
-}
-
-export function useShortcut(key: string, handler: () => void) {
-  const latest = useRef(handler);
-  latest.current = handler;
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key !== key || event.metaKey || event.ctrlKey || event.altKey) return;
-      const target = event.target;
-      if (
-        target instanceof HTMLElement &&
-        (target.isContentEditable || ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName))
-      ) {
-        return;
-      }
-      event.preventDefault();
-      latest.current();
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [key]);
-}
-
 function TagSection({
   datasets,
   selected,
@@ -115,6 +88,7 @@ function TagSection({
   const created = fetcher.data !== undefined && "created" in fetcher.data;
   const error = fetcher.data !== undefined && "error" in fetcher.data ? fetcher.data.error : null;
   const parentName = selected?.split("/").at(-1) ?? null;
+  const counts = useMemo(() => subtreeCounts(datasets), [datasets]);
 
   useEffect(() => {
     if (created && fetcher.state === "idle") setAdding(false);
@@ -163,7 +137,7 @@ function TagSection({
         {Object.keys(tags).length === 0 ? (
           <p className="hint tag-empty">Tags group datasets. Use + to add the first one.</p>
         ) : (
-          <TagTree datasets={datasets} nodes={tags} selected={selected} />
+          <TagTree counts={counts} nodes={tags} selected={selected} />
         )}
       </div>
     </section>
@@ -171,11 +145,11 @@ function TagSection({
 }
 
 function TagTree({
-  datasets,
+  counts,
   nodes,
   selected,
 }: {
-  datasets: Dataset[];
+  counts: Map<string, number>;
   nodes: Record<string, TagNode>;
   selected: string | null;
 }) {
@@ -194,21 +168,16 @@ function TagTree({
               to={current ? "/datasets" : `/datasets?tag=${encodeURIComponent(node.path)}`}
             >
               <span className="tag-name">{name}</span>
-              <span className="tag-count mono">{countUnder(datasets, node.path)}</span>
+              <span className="tag-count mono">{counts.get(node.path) ?? 0}</span>
             </Link>
             {Object.keys(node.children).length > 0 ? (
-              <TagTree datasets={datasets} nodes={node.children} selected={selected} />
+              <TagTree counts={counts} nodes={node.children} selected={selected} />
             ) : null}
           </li>
         );
       })}
     </ul>
   );
-}
-
-function countUnder(datasets: Dataset[], path: string): number {
-  return datasets.filter((dataset) => dataset.tags.some((tag) => tag === path || tag.startsWith(`${path}/`)))
-    .length;
 }
 
 export function CatalogAlert({ error }: { error: unknown }) {

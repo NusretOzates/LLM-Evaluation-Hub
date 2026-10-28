@@ -1,6 +1,6 @@
 """Apply a row processor and build the stored Polars frame."""
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 
 import polars as pl
@@ -8,6 +8,7 @@ from pydantic import ValidationError
 
 from llm_evaluation_hub.core.datasets.records import (
     ProcessedExample,
+    dump_json,
     encode_conversation,
     encode_expected_output,
     encode_extras,
@@ -52,28 +53,29 @@ def validate_segment_declaration(keys: Sequence[str]) -> list[str]:
         raise ValueError("segment keys must be unique")
     for key in ordered:
         validate_segment_key(key)
+        if key == "tools":
+            raise ValueError("tools is reserved for available tool definitions")
     return ordered
 
 
 def process_rows(
-    frame: pl.DataFrame,
+    rows: Iterable[dict[str, object]],
     processor: RowProcessor,
     segment_keys: Sequence[str],
 ) -> ProcessResult:
     """Process each source row. A `None` return drops that row."""
-    declared = list(segment_keys)
+    declared = validate_segment_declaration(segment_keys)
     stored: list[dict[str, object]] = []
     dropped = 0
-    rows_loaded = frame.height
-    for source_index, row in enumerate(frame.iter_rows(named=True)):
+    rows_loaded = 0
+    for source_index, row in enumerate(rows):
+        rows_loaded += 1
         example = _call_processor(processor, source_index, dict(row))
         if example is None:
             dropped += 1
             continue
-        _require_segments(example, declared, source_index)
+        require_segments(example, declared, source_index)
         stored.append(_stored_row(example, source_index, declared))
-    if not stored:
-        raise EmptyDatasetError()
     return ProcessResult(
         frame=_frame(stored, declared),
         rows_loaded=rows_loaded,
@@ -101,7 +103,7 @@ def _call_processor(
     return example
 
 
-def _require_segments(
+def require_segments(
     example: ProcessedExample,
     segment_keys: list[str],
     source_index: int,
@@ -125,6 +127,9 @@ def _stored_row(
         "conversation": encode_conversation(example.conversation),
         "expected_output": encode_expected_output(example.expected_output),
         "extras": encode_extras(example.extras),
+        "tools": dump_json(
+            [tool.model_dump(mode="json", exclude_none=True) for tool in example.tools]
+        ),
     }
     for key in segment_keys:
         row[key] = example.segments[key]
@@ -138,6 +143,7 @@ def _frame(rows: list[dict[str, object]], segment_keys: list[str]) -> pl.DataFra
         "conversation": pl.Utf8(),
         "expected_output": pl.Utf8(),
         "extras": pl.Utf8(),
+        "tools": pl.Utf8(),
     }
     for key in segment_keys:
         schema[key] = pl.Utf8()

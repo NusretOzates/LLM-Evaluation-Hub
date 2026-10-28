@@ -3,15 +3,15 @@ type: Reference
 title: Catalog API
 description: HTTP operations for tags, dataset metadata, and pages of stored rows.
 tags: [api]
-generated: { by: human:nusret, at: 2026-10-25T22:25:00+03:00 }
+generated: { by: process:codex-refactor, at: 2026-10-26T13:56:10+03:00 }
 status: stable
 ---
 
 # Catalog API
 
-`create_app(catalog_root)` in `src/llm_evaluation_hub/api/app.py:create_app` serves one `DatasetRepository`. The uvicorn factory `llm_evaluation_hub.api.asgi:app` passes `LLM_EVAL_CATALOG` or `data/catalog`. When `LLM_EVAL_SEED` is set, the factory publishes that directory into the catalog root before serving. [Runtime configuration](../configuration/runtime.md) states when the copy runs. Responses are JSON. CORS allows every origin, method, and header. There is no authentication.
+`create_app(catalog_root)` in `src/llm_evaluation_hub/api/app.py:create_app` serves one `DatasetRepository`. The uvicorn factory `llm_evaluation_hub.api.asgi:app` passes `LLM_EVAL_CATALOG` or `data/catalog`. When `LLM_EVAL_SEED` is set, the factory publishes that directory into the catalog root before serving. [Runtime configuration](../configuration/runtime.md) states when the copy runs. Responses are JSON. CORS grants no cross-origin access by default. Explicit development origins are optional. There is no authentication.
 
-The API does not register datasets and does not return `parquet_path`. Snapshot writes stay on `DatasetRepository.register`.
+The catalog routes do not register datasets or return `parquet_path`. The separate import routes accept bounded source and processor requests and submit durable jobs.
 
 ## Operations
 
@@ -63,6 +63,18 @@ The stored path for that leaf is `Trendyol Cases/Summarization`.
 | Status | When |
 | --- | --- |
 | 404 | `UnknownDatasetError` or `UnknownTagError`. The body is `{ "detail": "<message>" }`. |
-| 422 | `ValueError` from validation, including a bad tag forest, a bad offset, or a bad limit. FastAPI validation errors use the same status with a list `detail`. |
+| 422 | Request-domain validation, including a bad tag forest, a bad offset, or a bad limit. FastAPI validation errors use the same status with a list `detail`. |
 
 `DuplicateDatasetError` is not produced by these routes, because registration is not an HTTP operation.
+
+## Immutable identity and trust boundary
+
+Use `GET /dataset-ids/{id}`, `GET /dataset-ids/{id}/examples`, and `POST` or `DELETE /dataset-ids/{id}/tags` for arbitrary display names. Their response shapes, pagination and mutation semantics match the name-based endpoints. Missing IDs return 404. Existing `/datasets/{name}` endpoints remain available for compatibility with route-safe names; new workbench links use UUIDs.
+
+The default browser interface is same-origin through `/api`. CORS is disabled unless `LLM_EVAL_ORIGINS` names explicit supported origins. This is a local, unauthenticated service. An origin allowlist is not authentication for nonbrowser clients and does not authorize remote exposure. Request-domain validation maps to 422. Stored-data/SQLite/filesystem failures map to a generic 500 without returning payload details. The OpenAPI schema is the source for `web/app/api-schema.ts`; runtime response parsing remains in the frontend HTTP boundary.
+
+## Dataset imports
+
+The import router in `src/llm_evaluation_hub/api/import_routes.py` exposes `GET /dataset-sources`, `POST /dataset-source-samples`, `POST /dataset-previews`, `POST /dataset-imports`, `GET /dataset-imports`, `GET /dataset-imports/{job_id}`, `POST /dataset-imports/{job_id}/cancel`, and `GET /datasets/{dataset_id}/processor`. Submission returns `202`. The request and response models live in `src/llm_evaluation_hub/imports/contracts.py`; import-specific request validation omits submitted payload values from error responses.
+
+Source and preview operations return pinned coordinates and safe row diagnostics. A successful preview produces an expiring attestation bound to the source SHA, row limit, processor hash, segment keys, contract version, and runtime policy. Submission copies the full execution specification into a durable job. Job states are `queued`, `running`, `cancelling`, `succeeded`, `failed`, `cancelled`, and `interrupted`. The supervisor serializes cancellation with publication; only a completed job publishes a snapshot. See [Import a dataset in the workbench](../how-to/import-a-dataset.md) for the user workflow and [Core library](core.md) for execution limits.

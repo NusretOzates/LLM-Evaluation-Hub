@@ -8,6 +8,8 @@ services:
     environment:
       LLM_EVAL_CATALOG: /var/lib/llm-eval/catalog
       LLM_EVAL_SEED: ${LLM_EVAL_SEED-}
+      LLM_EVAL_ORIGINS: ${LLM_EVAL_ORIGINS-}
+      HF_TOKEN: ${HF_TOKEN-}
     volumes:
       - catalog:/var/lib/llm-eval/catalog
     healthcheck:
@@ -33,7 +35,7 @@ services:
     environment:
       API_UPSTREAM: http://api:8000
     ports:
-      - "127.0.0.1:8080:80"
+      - "127.0.0.1:${LLM_EVAL_WEB_PORT:-8080}:80"
     depends_on:
       api:
         condition: service_healthy

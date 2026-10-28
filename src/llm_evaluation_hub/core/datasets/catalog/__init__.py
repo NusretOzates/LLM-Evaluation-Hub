@@ -8,6 +8,11 @@ from llm_evaluation_hub.core.datasets.catalog.errors import (
     UnknownDatasetError,
     UnknownTagError,
 )
+from llm_evaluation_hub.core.datasets.catalog.imports import (
+    IdempotencyConflictError,
+    ImportStateError,
+    ImportStore,
+)
 from llm_evaluation_hub.core.datasets.catalog.repository import DatasetRecord, DatasetRepository
 from llm_evaluation_hub.core.datasets.catalog.tags import Tag
 
@@ -17,6 +22,9 @@ __all__ = [
     "DatasetRepository",
     "DuplicateDatasetError",
     "DuplicateTagError",
+    "IdempotencyConflictError",
+    "ImportStateError",
+    "ImportStore",
     "Tag",
     "TagInUseError",
     "UnknownDatasetError",

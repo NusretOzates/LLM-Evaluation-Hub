@@ -3,7 +3,7 @@ type: Reference
 title: Workbench design
 description: Visual tokens, layout, and the rules for changing the catalog workbench.
 tags: [workbench, design]
-generated: { by: human:nusret, at: 2026-10-25T22:04:00+03:00 }
+generated: { by: process:codex-refactor, at: 2026-10-26T13:56:10+03:00 }
 status: stable
 ---
 
@@ -103,3 +103,5 @@ There is no filled primary button. The dataset table row is the primary action, 
 ## Motion
 
 Hover and color changes are 120ms. The sidebar width is 180ms. Easing is `--ease` (`cubic-bezier(0.2, 0, 0, 1)`). A loading workspace fades to opacity 0.55 after 150ms. `prefers-reduced-motion: reduce` disables animations and transitions. Do not add entrance or scroll motion in the table or the row list.
+
+Styles are imported in explicit cascade order by `web/app/app.css`: base, shell, workspace, catalog, empty/error states, inspector and final loading/responsive overrides. Feature styles live in `web/app/styles/`; preserve that import order when moving rules. Browser regression tests capture inspector layouts at 1440, 1100 and 768 pixels with reduced motion.

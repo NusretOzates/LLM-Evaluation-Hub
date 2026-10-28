@@ -5,7 +5,16 @@ import math
 import re
 from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    TypeAdapter,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
 _SEGMENT_KEY = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 RESERVED_COLUMNS = frozenset({"source_index", "conversation", "expected_output", "extras"})
@@ -69,6 +78,48 @@ class MediaPart(BaseModel):
 
 
 ContentPart = Annotated[TextPart | MediaPart, Field(discriminator="type")]
+
+
+class FunctionDefinition(BaseModel):
+    """An available function schema, independent from historical calls."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    name: str = Field(min_length=1)
+    parameters: dict[str, JsonValue]
+    description: str | None = None
+    strict: bool | None = None
+
+    @model_serializer(mode="wrap")
+    def canonical_payload(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        """Omit absent optional fields so serialized definitions remain canonical."""
+        payload = handler(self)
+        return {key: value for key, value in payload.items() if value is not None}
+
+    @field_validator("description", "strict", mode="before")
+    @classmethod
+    def optional_nonnull(cls, value: object) -> object:
+        """Omitted optional fields are allowed; explicit null is not canonical."""
+        if value is None:
+            raise ValueError("optional tool fields must not be null")
+        return value
+
+    @field_validator("parameters", mode="before")
+    @classmethod
+    def finite_parameters(cls, value: object) -> object:
+        """Preserve JSON schemas and reject unsupported/nonfinite contents."""
+        if not isinstance(value, dict):
+            raise ValueError("tool parameters must be a JSON object")
+        return parse_json_value(value)
+
+
+class ToolDefinition(BaseModel):
+    """A canonical available function definition; never an executable capability."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    type: Literal["function"]
+    function: FunctionDefinition
 
 
 class FunctionCall(BaseModel):
@@ -240,6 +291,7 @@ class ProcessedExample(BaseModel):
 
     conversation: list[Message] = Field(min_length=1)
     expected_output: JsonValue | None = None
+    tools: list[ToolDefinition] = Field(default_factory=list)
     extras: dict[str, JsonValue] = Field(default_factory=dict)
     segments: dict[str, str] = Field(default_factory=dict)
 
@@ -254,6 +306,15 @@ class ProcessedExample(BaseModel):
         if "extras" in value and value["extras"] is not None:
             parse_json_value(value["extras"])
         return value
+
+    @field_validator("tools")
+    @classmethod
+    def unique_tools(cls, tools: list[ToolDefinition]) -> list[ToolDefinition]:
+        """Require unique function names within the example's ordered tool list."""
+        names = [tool.function.name for tool in tools]
+        if len(set(names)) != len(names):
+            raise ValueError("tool definition names must be unique")
+        return tools
 
     @model_validator(mode="after")
     def normalize(self) -> Self:

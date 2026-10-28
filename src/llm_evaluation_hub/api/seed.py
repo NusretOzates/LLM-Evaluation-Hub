@@ -1,92 +1,136 @@
-"""Publish a starter catalog when the target has no SQLite file."""
+"""Publish a complete starter catalog without clearing user-owned files."""
 
+import json
 import shutil
 import sqlite3
+import tempfile
+from contextlib import closing
 from pathlib import Path
 
-_SQLITE_SIDECARS = {
-    "catalog.sqlite",
-    "catalog.sqlite-wal",
-    "catalog.sqlite-shm",
-    ".catalog.sqlite.partial",
-}
+from llm_evaluation_hub.core.datasets.catalog.storage import catalog_lock
+
+_STARTER = ".starter"
+_MARKER = ".publication.json"
+_SIDECARS = {"catalog.sqlite", "catalog.sqlite-wal", "catalog.sqlite-shm"}
 
 
 def ensure_starter_catalog(catalog: Path, seed: Path) -> bool:
-    """Copy `seed` into `catalog` when `catalog` has no SQLite database.
+    """Stage a starter and publish its database last under the startup lock.
 
-    An existing `catalog.sqlite` is left in place, including after a process
-    restart. A copy that stopped before that file was published is removed and
-    copied again. The database file is published last, by rename.
-
-    Args:
-        catalog: Directory that should contain `catalog.sqlite`.
-        seed: Directory that already contains a starter `catalog.sqlite`.
-
-    Returns:
-        True when the starter catalog was published. False when `catalog`
-        already had a database file.
-
-    Raises:
-        FileNotFoundError: `seed` has no `catalog.sqlite`.
-        RuntimeError: The starter database fails `PRAGMA integrity_check`.
-        sqlite3.DatabaseError: `seed` is not a SQLite database.
+    Only Linux local filesystems are supported. An existing database wins.
+    Unknown target content is never removed. A completed .starter publication
+    can resume after process death. Incomplete .seed-stage-* directories remain
+    unreferenced for operator inspection; they are never automatically deleted.
+    This provides process-restart recovery, not power-loss durability.
     """
+    catalog, seed = catalog.resolve(), seed.resolve()
+    if catalog == seed or catalog in seed.parents or seed in catalog.parents:
+        raise ValueError("starter and target directories must not overlap")
     database = catalog / "catalog.sqlite"
-    if database.is_file():
-        return False
-    seed_database = seed / "catalog.sqlite"
-    if not seed_database.is_file():
-        raise FileNotFoundError(f"starter catalog is missing catalog.sqlite: {seed}")
-    _require_integrity(seed_database)
-    catalog.mkdir(parents=True, exist_ok=True)
-    _clear_directory(catalog)
-    _copy_payload(seed, catalog)
-    partial = catalog / ".catalog.sqlite.partial"
-    _backup_sqlite(seed_database, partial)
-    _require_integrity(partial)
-    partial.replace(database)
-    return True
+    with catalog_lock(catalog):
+        if database.is_file():
+            return False
+        source = seed / "catalog.sqlite"
+        if not source.is_file():
+            raise FileNotFoundError(f"starter catalog is missing catalog.sqlite: {seed}")
+        _require_integrity(source)
+        _require_owned_target(catalog)
+        starter = catalog / _STARTER
+        if not starter.exists():
+            _stage_catalog(seed, catalog)
+        marker = json.loads((starter / _MARKER).read_text())
+        if marker != {"format": 1, "target": str(catalog)}:
+            raise RuntimeError("unrecognized starter publication marker")
+        staged_database = starter / "catalog.sqlite"
+        _require_integrity(staged_database)
+        _require_snapshots(staged_database, catalog)
+        staged_database.replace(database)
+        return True
+
+
+def _require_owned_target(catalog: Path) -> None:
+    """Reject unrelated content before any publication mutation."""
+    for child in catalog.iterdir():
+        if child.name == ".catalog.lock":
+            continue
+        if (
+            child.name == _STARTER
+            and child.is_dir()
+            and not child.is_symlink()
+            and (child / _MARKER).is_file()
+        ):
+            continue
+        if child.name.startswith(".seed-stage-") and child.is_dir() and not child.is_symlink():
+            # Never remove these. They are not made visible by the database.
+            continue
+        raise RuntimeError(f"refusing to seed nonempty catalog: {child.name}")
+
+
+def _stage_catalog(seed: Path, catalog: Path) -> None:
+    """Copy into a private directory, then atomically publish the payload tree."""
+    with tempfile.TemporaryDirectory(prefix=".seed-stage-", dir=catalog) as temporary:
+        stage = Path(temporary)
+        for path in sorted(seed.rglob("*")):
+            if path.is_symlink():
+                raise ValueError("starter catalogs must not contain symlinks")
+            if not path.is_file() or path.name in _SIDECARS:
+                continue
+            target = stage / path.relative_to(seed)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, target)
+        staged_database = stage / "catalog.sqlite"
+        _backup_sqlite(seed / "catalog.sqlite", staged_database)
+        with closing(sqlite3.connect(staged_database)) as connection, connection:
+            has_datasets = connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='datasets'"
+            ).fetchone()
+            if has_datasets:
+                for dataset_id, relative in connection.execute(
+                    "SELECT id, parquet_path FROM datasets"
+                ):
+                    source_path = (seed / relative).resolve()
+                    if not source_path.is_relative_to(seed) or not source_path.is_file():
+                        raise RuntimeError("starter references a missing or unsafe snapshot")
+                    connection.execute(
+                        "UPDATE datasets SET parquet_path = ? WHERE id = ?",
+                        (f"{_STARTER}/{relative}", dataset_id),
+                    )
+        _require_integrity(staged_database)
+        (stage / _MARKER).write_text(json.dumps({"format": 1, "target": str(catalog)}))
+        stage.rename(catalog / _STARTER)
+
+
+def _require_snapshots(database: Path, catalog: Path) -> None:
+    """Check published paths before making metadata visible."""
+    with closing(sqlite3.connect(database)) as connection:
+        if not connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='datasets'"
+        ).fetchone():
+            return
+        for (relative,) in connection.execute("SELECT parquet_path FROM datasets"):
+            path = (catalog / relative).resolve()
+            if not path.is_relative_to(catalog / _STARTER) or not path.is_file():
+                raise RuntimeError("starter references a missing or unsafe snapshot")
 
 
 def _require_integrity(database: Path) -> None:
-    """Raise when `database` is missing pages or is not SQLite."""
-    connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+    """Reject a SQLite database whose integrity check is not ok."""
+    connection = sqlite3.connect(f"{database.as_uri()}?mode=ro", uri=True)
     try:
         row = connection.execute("PRAGMA integrity_check").fetchone()
     finally:
         connection.close()
     if row is None or row[0] != "ok":
-        detail = "no result" if row is None else row[0]
-        raise RuntimeError(f"catalog failed integrity check at {database}: {detail}")
-
-
-def _clear_directory(directory: Path) -> None:
-    """Remove every child of `directory` and leave the directory itself."""
-    for child in directory.iterdir():
-        if child.is_symlink() or not child.is_dir():
-            child.unlink()
-        else:
-            shutil.rmtree(child)
-
-
-def _copy_payload(seed: Path, catalog: Path) -> None:
-    """Copy snapshot files, leaving the SQLite database for a later rename."""
-    for path in sorted(seed.rglob("*")):
-        if not path.is_file() or path.name in _SQLITE_SIDECARS:
-            continue
-        relative = path.relative_to(seed)
-        target = catalog / relative
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(path, target)
+        raise RuntimeError("starter database failed integrity check")
 
 
 def _backup_sqlite(source: Path, dest: Path) -> None:
-    """Write a consistent SQLite snapshot, including any WAL frames."""
-    source_connection = sqlite3.connect(f"file:{source}?mode=ro", uri=True)
+    """Write a consistent SQLite snapshot, including committed WAL frames."""
+    source_connection = sqlite3.connect(f"{source.as_uri()}?mode=ro", uri=True)
     dest_connection = sqlite3.connect(dest)
     try:
         source_connection.backup(dest_connection)
+        dest_connection.execute("PRAGMA journal_mode = DELETE").fetchone()
     finally:
         dest_connection.close()
         source_connection.close()
