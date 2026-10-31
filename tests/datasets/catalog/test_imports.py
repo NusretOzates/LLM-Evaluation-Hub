@@ -1,6 +1,5 @@
-"""Import publication, legacy snapshots, and shared backup/seed persistence."""
+"""Import publication, current snapshots, and shared backup/seed persistence."""
 
-import json
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
@@ -165,35 +164,6 @@ def test_publication_rejects_empty_results_without_files(tmp_path: Path) -> None
             processor_id="test",
         )
     assert not list(tmp_path.rglob("*.parquet"))
-
-
-def test_format_one_tools_segment_survives_migration_without_rewrite(tmp_path: Path) -> None:
-    repository = DatasetRepository(tmp_path)
-    _publish(repository)
-    record = repository.get("imported")
-    snapshot = tmp_path / record.parquet_path
-    # Reconstruct a schema-v1 database and a legacy tools-named segment.
-    pl.read_parquet(snapshot).with_columns(pl.lit("legacy segment").alias("tools")).write_parquet(
-        snapshot
-    )
-    original = snapshot.read_bytes()
-    with sqlite3.connect(tmp_path / "catalog.sqlite") as connection:
-        connection.execute("UPDATE datasets SET segment_keys = ?", (json.dumps(["tools"]),))
-        connection.execute("ALTER TABLE datasets DROP COLUMN snapshot_format_version")
-        connection.execute("PRAGMA user_version = 1")
-    migrated = DatasetRepository(tmp_path)
-    assert migrated.get("imported").snapshot_format_version == 1
-    assert snapshot.read_bytes() == original
-    assert migrated.examples("imported")[0].segments == {"tools": "legacy segment"}
-    assert migrated.examples("imported")[0].tools == []
-    with pytest.raises(ValueError, match="reserved"):
-        migrated.register_processed(
-            "new",
-            _result(),
-            SourceDescriptor(source_type="memory"),
-            processor_id="test",
-            segments=["tools"],
-        )
 
 
 @pytest.mark.parametrize("corruption", ["missing", "null", "malformed", "future"])

@@ -4,7 +4,7 @@ okf_version: "0.2"
 
 # LLM Evaluation Hub documentation
 
-This bundle documents the local dataset catalog, the HTTP API, and the workbench. Register datasets with the Python library or import them from the workbench. The repository does not run evaluations, train models, or serve model inference.
+This bundle documents the local dataset catalog, the HTTP API, and the workbench. Register datasets with the Python library or import them from the workbench. Inference runs send stored conversations to user-managed endpoints and retain their responses. The repository does not score responses, train models, or serve a model.
 
 | Directory | Role |
 | --- | --- |
@@ -25,7 +25,7 @@ This bundle documents the local dataset catalog, the HTTP API, and the workbench
 ## Change the code
 
 - [Code map](architecture/code-map.md) lists each capability, its entry point, the files that implement it, and the tests that cover it.
-- [Core library](modules/core.md), [Catalog API](modules/api.md), and [Workbench](modules/workbench.md) are the behavior references.
+- [Core library](modules/core.md), [Catalog API](modules/api.md), [Inference runs](modules/inference.md), and [Workbench](modules/workbench.md) are the behavior references.
 - [Workbench design](modules/workbench-design.md) is the visual system: tokens, layout, type, and the rules for changing them.
 
 ## Run it

@@ -67,8 +67,8 @@ A tag has at most one parent. A dataset links to many tags, and a tag labels man
 | --- | --- | --- |
 | `llm_evaluation_hub.core` | Library inside the registering process and the API process | Snapshots, tags, conversation records |
 | Catalog API | `uvicorn` factory `llm_evaluation_hub.api.asgi:app` | HTTP reads, tag creation, tag links |
-| Workbench | React Router dev server or static build | Pages at `/datasets` and `/datasets/:name` |
+| Workbench | React Router dev server or static build | Pages at `/datasets` and `/datasets/:id` |
 
 The API process and a registration script can open the same catalog directory. SQLite commits one connection at a time. The workbench does not take a lock of its own.
 
-Initialization and seed publication share a Linux kernel lock, while ordinary connections perform only connection settings and transactions. Metadata list reads batch tag links. Workbench routes share root catalog data and use immutable IDs for new links. [Backup and recover](../how-to/backup-and-recover.md) defines the SQLite/Parquet transaction boundary and the supported filesystem/durability scope.
+Initialization and seed publication share a Linux kernel lock, while ordinary connections perform only connection settings and transactions. Metadata list reads batch tag links. Workbench routes share root catalog data and use immutable IDs for links. [Backup and recover](../how-to/backup-and-recover.md) defines the SQLite/Parquet transaction boundary and the supported filesystem/durability scope.

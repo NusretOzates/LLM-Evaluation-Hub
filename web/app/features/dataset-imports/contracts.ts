@@ -1,4 +1,5 @@
 import type * as Schema from "../../api-schema";
+import type { Output } from "../inference/api";
 import type { ExampleRow, ToolDefinition } from "../../catalog-types";
 export type JsonValue = Schema.JsonValue;
 
@@ -28,10 +29,11 @@ export type PreviewRow = Omit<Schema.PreviewRow, "example" | "error"> & {
 };
 export type DatasetPreview = Omit<Schema.PreviewView, "id" | "rows"> & { id: string | null; rows: PreviewRow[] };
 export type ImportSpecification = Schema.ImportSpec & {
+  output_format: Output;
   source: SourceCoordinates;
   tags: string[];
-  processor_contract_version: string;
-  runtime_policy_version: string;
+  processor_contract_version: NonNullable<Schema.ImportSpec["processor_contract_version"]>;
+  runtime_policy_version: NonNullable<Schema.ImportSpec["runtime_policy_version"]>;
 };
 export type ImportJob = Schema.JobView & {
   dataset_id: string | null;

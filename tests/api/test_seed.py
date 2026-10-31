@@ -7,10 +7,12 @@ import pytest
 
 from llm_evaluation_hub.api.asgi import app
 from llm_evaluation_hub.api.seed import ensure_starter_catalog
+from llm_evaluation_hub.core.datasets.catalog import DatasetRepository
 
 
 def _seed(root: Path) -> Path:
     root.mkdir()
+    DatasetRepository(root)
     database = sqlite3.connect(root / "catalog.sqlite")
     try:
         database.execute("CREATE TABLE marker (value TEXT)")

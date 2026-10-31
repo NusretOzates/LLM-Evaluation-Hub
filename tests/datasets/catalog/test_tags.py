@@ -9,7 +9,6 @@ from tests.datasets.catalog.memory import MemorySource
 from llm_evaluation_hub.core.datasets.catalog import (
     DatasetRepository,
     DuplicateTagError,
-    TagInUseError,
     UnknownTagError,
 )
 from llm_evaluation_hub.core.datasets.records import ProcessedExample
@@ -179,8 +178,6 @@ def test_add_and_remove_tags_change_only_the_links(tmp_path: Path) -> None:
         "Trendyol Cases/classification",
         "Trendyol Cases/summarization",
     ]
-    with pytest.raises(TagInUseError):
-        repository.delete_tag("Trendyol Cases")
     repository.remove_tags(
         "cases",
         ["Trendyol Cases/classification", "Trendyol Cases/summarization"],

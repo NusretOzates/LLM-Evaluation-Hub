@@ -291,15 +291,16 @@ def test_storage_diagnostics_and_backup_restore(tmp_path: Path) -> None:
         backup_catalog(root, tmp_path / "backup")
 
 
-def test_future_schema_is_rejected_without_rewriting_version(tmp_path: Path) -> None:
+@pytest.mark.parametrize("version", [0, 1, 2, 3, 4, 99])
+def test_other_schemas_are_rejected_without_rewriting_version(tmp_path: Path, version: int) -> None:
     root = tmp_path / "catalog"
     DatasetRepository(root)
     with sqlite3.connect(root / "catalog.sqlite") as connection:
-        connection.execute("PRAGMA user_version = 99")
+        connection.execute(f"PRAGMA user_version = {version}")
     with pytest.raises(RuntimeError, match="unsupported catalog schema"):
         DatasetRepository(root)
     with sqlite3.connect(root / "catalog.sqlite") as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 99
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == version
 
 
 def test_killed_registration_is_reported_without_exposing_dataset(tmp_path: Path) -> None:

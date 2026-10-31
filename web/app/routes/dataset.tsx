@@ -1,6 +1,6 @@
 import { Link, useRouteLoaderData, type ShouldRevalidateFunctionArgs } from "react-router";
 
-import { addTags, CatalogError, getDataset, listDatasets, listExamples, removeTags } from "../catalog";
+import { addTags, CatalogError, getDataset, listExamples, removeTags } from "../catalog";
 
 import { CatalogAlert } from "../shared/feedback";
 
@@ -19,15 +19,15 @@ export function meta() {
 }
 
 export async function clientLoader({ params, request }: Route.ClientLoaderArgs) {
-  const name = params.name;
+  const id = params.id;
 
-  if (name === undefined || name === "") {
-    throw new CatalogError("Dataset name is missing.", 404);
+  if (id === undefined || id === "") {
+    throw new CatalogError("Dataset ID is missing.", 404);
   }
 
   const { offset } = readPosition(new URL(request.url).searchParams);
 
-  const dataset = await resolveDataset(name, request.signal);
+  const dataset = await getDataset(id, request.signal);
 
   const page = await listExamples(dataset.id, offset, PAGE_SIZE, request.signal);
 
@@ -53,9 +53,9 @@ export function shouldRevalidate({
 }
 
 export async function clientAction({ params, request }: Route.ClientActionArgs): Promise<ActionData> {
-  const name = params.name;
+  const id = params.id;
 
-  if (name === undefined || name === "") return { error: "Dataset name is missing." };
+  if (id === undefined || id === "") return { error: "Dataset ID is missing." };
 
   const form = await request.formData();
 
@@ -68,7 +68,7 @@ export async function clientAction({ params, request }: Route.ClientActionArgs):
   try {
     if (intent !== "attach" && intent !== "detach") return { error: "Unknown tag action." };
 
-    const dataset = await resolveDataset(name, request.signal);
+    const dataset = await getDataset(id, request.signal);
 
     if (intent === "detach") await removeTags(dataset.id, [path]);
     else await addTags(dataset.id, [path]);
@@ -109,20 +109,4 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
       </div>
     </div>
   );
-}
-
-async function resolveDataset(identity: string, signal: AbortSignal) {
-  // Preserve existing name bookmarks while new links always use immutable IDs.
-
-  try {
-    return await getDataset(identity, signal);
-  } catch (error) {
-    if (!(error instanceof CatalogError) || error.status !== 404) throw error;
-
-    const dataset = (await listDatasets(null, signal)).find((item) => item.name === identity);
-
-    if (dataset === undefined) throw error;
-
-    return dataset;
-  }
 }

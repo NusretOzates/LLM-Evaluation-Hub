@@ -4,7 +4,6 @@ from llm_evaluation_hub.core.datasets.catalog.errors import (
     CatalogError,
     DuplicateDatasetError,
     DuplicateTagError,
-    TagInUseError,
     UnknownDatasetError,
     UnknownTagError,
 )
@@ -26,7 +25,6 @@ __all__ = [
     "ImportStateError",
     "ImportStore",
     "Tag",
-    "TagInUseError",
     "UnknownDatasetError",
     "UnknownTagError",
 ]

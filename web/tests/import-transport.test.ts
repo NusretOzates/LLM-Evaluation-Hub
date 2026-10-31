@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { getImport, listImports } from "../app/features/dataset-imports/transport";
 
-test("historical and future job versions remain readable", async () => {
+test("current import job is readable", async () => {
   const originalFetch = globalThis.fetch;
   const job = {
-    id: "old",
-    name: "old",
+    id: "current",
+    name: "current",
     state: "failed",
     phase: "failed",
     rows_loaded: 0,
@@ -24,16 +24,22 @@ test("historical and future job versions remain readable", async () => {
       source_hash: "hash",
       segment_keys: [],
       tags: [],
-      processor_contract_version: "1",
-      runtime_policy_version: "99",
-      runtime_version: "old",
+      output_format: { kind: "text", schema: null, strict: true },
+      processor_contract_version: "2",
+      runtime_policy_version: "1",
+      runtime_version: "1.3.0",
     },
   };
   try {
     globalThis.fetch = async (input) =>
-      new Response(JSON.stringify(String(input).endsWith("/old") ? job : { jobs: [job] }));
+      new Response(JSON.stringify(String(input).endsWith("/current") ? job : { jobs: [job] }));
     assert.deepEqual((await listImports())[0].spec, job.spec);
-    assert.deepEqual((await getImport("old")).spec, job.spec);
+    assert.deepEqual((await getImport("current")).spec, job.spec);
+    job.spec.processor_contract_version = "1";
+    await assert.rejects(getImport("current"), /unexpected job specification/);
+    job.spec.processor_contract_version = "2";
+    job.spec.runtime_policy_version = "99";
+    await assert.rejects(getImport("current"), /unexpected job specification/);
   } finally {
     globalThis.fetch = originalFetch;
   }

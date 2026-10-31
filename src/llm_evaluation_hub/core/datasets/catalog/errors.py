@@ -44,10 +44,5 @@ class UnknownTagError(CatalogError):
         super().__init__(f"unknown tag: {path}")
 
 
-class TagInUseError(CatalogError):
-    """A tag still has a child tag or a dataset link."""
-
-    def __init__(self, path: str) -> None:
-        """Name the tag that cannot be deleted."""
-        self.path = path
-        super().__init__(f"tag is in use: {path}")
+class DatasetInUseError(ValueError):
+    """A dataset is required by unfinished inference work."""

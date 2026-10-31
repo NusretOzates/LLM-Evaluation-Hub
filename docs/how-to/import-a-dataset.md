@@ -44,11 +44,17 @@ def process(row: dict) -> dict | None:
             }
         ],
         "expected_output": row.get("label"),
+        "extras": {
+            "rubric": row.get("rubric", ""),
+            "context": row.get("context", ""),
+        },
         "segments": {"language": str(row["language"])},
     }
 ```
 
 This example returns a `language` segment and requires source columns named `text`, `label`, and `language`. Tool definitions describe available functions; the service does not execute them, validate the complete JSON Schema dialect, or resolve references. To map a source tools column, write the conversion in the processor. For JSON-encoded tool data, parse it in processor code with `json.loads`.
+
+Use `extras` for additional per-example values to use in judge prompts. Keys are user-defined, and values can be JSON strings, numbers, booleans, null, lists, or objects. Starter templates include commented examples for `rubric` and `context`; uncomment or replace them with fields from your source.
 
 Choose **Run preview** to execute the processor on the cached sample. Inspect each kept, skipped, or failed row. The preview must retain at least one sampled row before you can continue. Preview success does not guarantee the full source will pass. A processor error on any imported row fails the job and publishes no partial snapshot.
 
@@ -56,7 +62,9 @@ The runtime is the constrained Monty Python subset. It does not provide host cal
 
 ## Review and submit
 
-Review the name, tags, pinned source revision, row limit, segment keys, processor hash, and sample results. Choose **Import dataset** to create a durable job. The job page at `/dataset-imports/{id}` shows state, progress, and any safe diagnostic. The job list at `/dataset-imports` lets you rediscover submitted jobs after navigation or refresh.
+Review the name, tags, pinned source revision, row limit, segment keys, processor hash, and sample results. In **Model output format**, choose Text, JSON object, or JSON Schema as the dataset's inference default. For JSON Schema, add fields visually or paste a schema in the JSON tab. Field descriptions and allowed values are under **Field settings**; **About this output** describes the whole response for the model. You can change this default later from the dataset detail page.
+
+Choose **Import dataset** to create a durable job. The job page at `/dataset-imports/{id}` shows state, progress, and any safe diagnostic. The job list at `/dataset-imports` lets you rediscover submitted jobs after navigation or refresh.
 
 You can cancel an active job. Failed, cancelled, or interrupted jobs do not publish a partial dataset. Retry opens the form with the previous settings filled in, but requires a fresh source sample and preview. Interrupted jobs are not resumed automatically. Successful jobs publish an immutable snapshot that you can inspect from the dataset catalog.
 

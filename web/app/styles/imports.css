@@ -68,6 +68,18 @@
 .import-card > header {
   margin-bottom: 21px;
 }
+.import-output-format {
+  margin-block: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.import-output-format h3 {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+.import-output-format > .hint {
+  margin: 0 0 16px;
+}
 .import-card > header h2 {
   margin: 2px 0 4px;
   font-size: 17px;

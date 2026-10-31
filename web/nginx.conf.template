@@ -3,6 +3,12 @@ server {
     server_name _;
     root /usr/share/nginx/html;
 
+    location = /health {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
     location /api/ {
         resolver 127.0.0.11 valid=10s ipv6=off;
         set $upstream ${API_UPSTREAM};

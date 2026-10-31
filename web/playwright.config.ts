@@ -1,21 +1,27 @@
 import { defineConfig } from "@playwright/test";
 
+const apiPort = process.env.WORKBENCH_TEST_API_PORT ?? "8000";
+const webPort = process.env.WORKBENCH_TEST_WEB_PORT ?? "5173";
+const apiUrl = `http://127.0.0.1:${apiPort}`;
+const webUrl = `http://127.0.0.1:${webPort}`;
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
   workers: 1,
   retries: 0,
-  use: { baseURL: "http://127.0.0.1:5173", trace: "retain-on-failure" },
+  use: { baseURL: webUrl, trace: "retain-on-failure" },
   webServer: [
     {
       command: "cd .. && uv run python scripts/serve_test_catalog.py",
-      url: "http://127.0.0.1:8000/datasets",
+      url: `${apiUrl}/datasets`,
       reuseExistingServer: false,
+      env: { WORKBENCH_TEST_API_PORT: apiPort },
     },
     {
-      command: "npm run preview -- --port 5173 --strictPort",
-      url: "http://127.0.0.1:5173",
+      command: `npm run preview -- --port ${webPort} --strictPort`,
+      url: webUrl,
       reuseExistingServer: false,
+      env: { WORKBENCH_TEST_API: apiUrl },
     },
   ],
 });

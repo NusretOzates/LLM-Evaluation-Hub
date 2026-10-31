@@ -1,6 +1,6 @@
 import { Clock3 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link } from "react-router";
+import { Link, useRevalidator } from "react-router";
 import { StatusLabel } from "../../shared/controls";
 import { CatalogAlert } from "../../shared/feedback";
 import type { ImportJob } from "./contracts";
@@ -16,6 +16,14 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 export default function ImportList({ loaderData }: Route.ComponentProps) {
   const [jobs, setJobs] = useState(loaderData.jobs);
   const [error, setError] = useState<string | null>(null);
+  const { revalidate } = useRevalidator();
+  const completedImports = jobs
+    .filter((job) => job.state === "succeeded")
+    .map((job) => job.id)
+    .join(",");
+  useEffect(() => {
+    if (completedImports) void revalidate();
+  }, [completedImports, revalidate]);
   useEffect(() => {
     let active = true;
     let timer: ReturnType<typeof setTimeout>;

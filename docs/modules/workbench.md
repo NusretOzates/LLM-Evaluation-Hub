@@ -14,7 +14,7 @@ The site in `web/` is a React Router application with server rendering off (`web
 | Route | What it shows |
 | --- | --- |
 | `/datasets` | Active datasets, name search, and match-all tag filters |
-| `/datasets/:name` | One example, its page of examples, and dataset metadata |
+| `/datasets/:id` | One example, its page of examples, and dataset metadata |
 | `/tags` | Searchable tag tree and selected-tag management |
 | `/dataset-imports/new` | Four-step dataset import form |
 | `/dataset-imports` and `/dataset-imports/:id` | Import history and job details |
@@ -26,7 +26,7 @@ The root loader retrieves the tag forest and active datasets. Dataset search use
 
 The `/tags` tree uses `selected` for the detail path and `q` for tree search. Details show the number of directly tagged active datasets and distinct datasets in the branch. Create a top-level tag or a sub-tag from this page. Deletion can remove a subtree or remove a grouping and promote its children; confirmations show the affected scope. Dataset records remain intact. Attach and detach dataset tags from the inspector metadata pane.
 
-Dataset links use immutable IDs; existing single-segment name bookmarks still resolve through the compatibility lookup. At narrow widths cards expose secondary metadata under Details. Dataset actions move a snapshot to Trash after confirmation. Names remain reserved in Trash until restoration or permanent deletion. Import history remains available after a dataset is trashed or purged.
+Dataset links use immutable IDs. At narrow widths cards expose secondary metadata under Details. Dataset actions move a snapshot to Trash after confirmation. Names remain reserved in Trash until restoration or permanent deletion. Import history remains available after a dataset is trashed or purged.
 
 The sidebar collapse preference is stored separately for catalog and inspector views under `sidebar-collapsed` and `sidebar-collapsed-detail`. `[` toggles the current view. Appearance is System, Light, or Dark and is stored as `evaluation-hub.theme` when browser storage is available.
 

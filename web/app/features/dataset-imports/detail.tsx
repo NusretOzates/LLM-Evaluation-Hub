@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useRouteLoaderData } from "react-router";
+import { Link, useNavigate, useRevalidator, useRouteLoaderData } from "react-router";
 import { Dialog } from "../../shared/dialog";
 import { StatusLabel, Button } from "../../shared/controls";
 import { CatalogAlert } from "../../shared/feedback";
@@ -20,7 +20,19 @@ export default function ImportDetail({ loaderData }: Route.ComponentProps) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [catalogCheckedFor, setCatalogCheckedFor] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { revalidate } = useRevalidator();
+  useEffect(() => {
+    if (job.state !== "succeeded") return;
+    let active = true;
+    void revalidate().then(() => {
+      if (active) setCatalogCheckedFor(job.id);
+    });
+    return () => {
+      active = false;
+    };
+  }, [job.id, job.state, revalidate]);
   useEffect(() => {
     let active = true;
     let timer: ReturnType<typeof setTimeout>;
@@ -130,7 +142,7 @@ export default function ImportDetail({ loaderData }: Route.ComponentProps) {
                 Retry with this specification
               </Link>
             ) : null}
-            {job.state === "succeeded" && !datasetId ? (
+            {job.state === "succeeded" && catalogCheckedFor === job.id && !datasetId ? (
               <p>This dataset is in Trash or has been permanently deleted.</p>
             ) : null}
             {job.state === "succeeded" && datasetId ? (
@@ -142,9 +154,6 @@ export default function ImportDetail({ loaderData }: Route.ComponentProps) {
                 Open dataset
               </button>
             ) : null}
-            <Link className="button-ghost" to="/dataset-imports">
-              All import jobs
-            </Link>
           </div>
         </section>
         <details className="import-card">

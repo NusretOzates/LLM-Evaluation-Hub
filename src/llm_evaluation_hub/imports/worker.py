@@ -11,6 +11,7 @@ from multiprocessing.connection import Connection
 from pathlib import Path
 from typing import cast
 
+from jsonschema.exceptions import SchemaError
 from pydantic import ValidationError
 
 from llm_evaluation_hub.core.datasets.catalog.errors import DuplicateDatasetError, UnknownTagError
@@ -22,8 +23,6 @@ from llm_evaluation_hub.core.datasets.processing import (
 )
 from llm_evaluation_hub.core.datasets.records import ProcessedExample
 from llm_evaluation_hub.imports.contracts import (
-    PROCESSOR_CONTRACT_VERSION,
-    RUNTIME_POLICY_VERSION,
     Diagnostic,
     ImportSpec,
     SampleRequest,
@@ -35,6 +34,7 @@ from llm_evaluation_hub.imports.runtime import (
     validate_json_budget,
 )
 from llm_evaluation_hub.imports.sources import SourceAdapter
+from llm_evaluation_hub.inference.compiler import validate_format
 
 MAX_AGGREGATE_BYTES = 128 * 1024 * 1024
 
@@ -96,18 +96,16 @@ def diagnostic(error: Exception) -> dict[str, object]:
 def validated_spec(value: object) -> ImportSpec:
     """Reject incompatible attestations before accepting or executing work."""
     try:
-        raw = value.model_dump(mode="json") if isinstance(value, ImportSpec) else value
+        raw = (
+            value.model_dump(mode="json", by_alias=True) if isinstance(value, ImportSpec) else value
+        )
         spec = ImportSpec.model_validate(raw)
         validate_segment_declaration(spec.segment_keys)
-    except (ValidationError, ValueError) as error:
+        validate_format(spec.output_format)
+    except (ValidationError, ValueError, SchemaError) as error:
         raise ProcessorError("validation", "The import specification is invalid.") from error
     digest = hashlib.sha256(spec.source_code.encode("utf-8")).hexdigest()
-    if (
-        spec.source_hash != digest
-        or spec.runtime_version != RUNTIME_VERSION
-        or spec.processor_contract_version != PROCESSOR_CONTRACT_VERSION
-        or spec.runtime_policy_version != RUNTIME_POLICY_VERSION
-    ):
+    if spec.source_hash != digest or spec.runtime_version != RUNTIME_VERSION:
         raise ProcessorError(
             "validation", "The processor attestation is incompatible; preview again."
         )

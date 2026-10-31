@@ -54,7 +54,7 @@ print(repo.inspect_storage())
 | `.starter` with publication marker and staged database | Seeding can validate and finish the pending publication under `.catalog.lock`. An ordinary repository initializer refuses to create an empty database over pending seed artifacts; resume with the seed configured first. Keep the same target path when resuming because the marker binds ownership to that path. |
 | Unknown content with no database | Seeding rejects the target. Move your files deliberately or choose a fresh catalog root; startup never clears the directory. |
 | SQLite lock timeout | The default busy timeout is 5 seconds. Identify the writer and retry after it finishes; never unlink `.catalog.lock` while processes exist. |
-| Unsupported schema version | Startup refuses the catalog before running schema DDL. Use a compatible application or restore a compatible backup. No downgrade migration is provided. |
+| Unsupported schema version | Startup refuses the catalog before running schema DDL. Use a backup in the current format or recreate a disposable development catalog. No schema migration is provided. |
 | Corrupt stored JSON or Parquet | API returns a generic server error. Check server diagnostics and restore a matching snapshot/index pair. Do not classify corruption as a client validation error. |
 
 ## Concurrency and durability

@@ -147,7 +147,9 @@ def submit(body: CreateImportRequest, request: Request) -> JobView:
             )
             if not replay:
                 raise SampleLookupError(expired=True, resource="Processor preview")
-        spec = validated_spec(attestation["spec"]).model_copy(update={"tags": body.tags})
+        spec = validated_spec(attestation["spec"]).model_copy(
+            update={"tags": body.tags, "output_format": body.output_format}
+        )
         return JobView.model_validate(supervisor.submit(body.name, spec, body.idempotency_key))
     except Exception as error:
         raise _failure(error) from None
@@ -183,7 +185,7 @@ def cancel_import(job_id: str, request: Request) -> JobView:
         raise _failure(error) from None
 
 
-@router.get("/datasets/{dataset_id}/processor", response_model=ProcessorView)
+@router.get("/dataset-ids/{dataset_id}/processor", response_model=ProcessorView)
 def processor(dataset_id: str, request: Request) -> ProcessorView:
     """Read optional processor provenance from an immutable snapshot."""
     return ProcessorView.model_validate(

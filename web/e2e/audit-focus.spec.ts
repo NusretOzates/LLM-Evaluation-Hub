@@ -25,7 +25,8 @@ for (const theme of ["light", "dark"] as const) {
     }
     await page.keyboard.press("Escape");
     await expect(filter).toBeFocused();
-    await page.goto("/datasets/Alpha");
+    await page.goto("/datasets");
+    await page.getByRole("link", { name: "Alpha", exact: true }).click();
     const examples = page.getByRole("button", { name: "Row list" });
     await examples.click();
     const exampleSheet = page.getByRole("dialog", { name: "Examples" });

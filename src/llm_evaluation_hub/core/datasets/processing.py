@@ -53,8 +53,6 @@ def validate_segment_declaration(keys: Sequence[str]) -> list[str]:
         raise ValueError("segment keys must be unique")
     for key in ordered:
         validate_segment_key(key)
-        if key == "tools":
-            raise ValueError("tools is reserved for available tool definitions")
     return ordered
 
 

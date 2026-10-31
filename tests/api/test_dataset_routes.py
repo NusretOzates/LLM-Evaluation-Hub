@@ -21,7 +21,7 @@ def _processor(row: dict[str, object]) -> ProcessedExample | None:
     )
 
 
-def _seed(root: Path) -> None:
+def _seed(root: Path) -> dict[str, str]:
     repository = DatasetRepository(root)
     repository.ensure_path(["Trendyol Cases", "classification"])
     repository.ensure_path(["Language", "Turkish"])
@@ -46,13 +46,15 @@ def _seed(root: Path) -> None:
         segments=["language"],
     )
 
+    return {record.name: record.id for record in repository.list_datasets()}
+
 
 def test_list_returns_inspection_metadata(catalog_root: Path, client: TestClient) -> None:
-    _seed(catalog_root)
+    dataset_id = _seed(catalog_root)["classification-cases"]
 
     listed = client.get("/datasets")
     filtered = client.get("/datasets", params={"tag": "Trendyol Cases"})
-    one = client.get("/datasets/classification-cases")
+    one = client.get(f"/dataset-ids/{dataset_id}")
 
     assert listed.status_code == 200
     assert [item["name"] for item in listed.json()] == ["classification-cases", "turkish-only"]
@@ -71,15 +73,15 @@ def test_list_returns_inspection_metadata(catalog_root: Path, client: TestClient
 
 
 def test_tag_links_follow_the_dataset(catalog_root: Path, client: TestClient) -> None:
-    _seed(catalog_root)
+    dataset_id = _seed(catalog_root)["classification-cases"]
 
     linked = client.post(
-        "/datasets/classification-cases/tags",
+        f"/dataset-ids/{dataset_id}/tags",
         json={"paths": ["Language/Turkish"]},
     )
     removed = client.request(
         "DELETE",
-        "/datasets/classification-cases/tags",
+        f"/dataset-ids/{dataset_id}/tags",
         json={"paths": ["Trendyol Cases/classification"]},
     )
 
@@ -88,36 +90,36 @@ def test_tag_links_follow_the_dataset(catalog_root: Path, client: TestClient) ->
     assert removed.status_code == 200
     assert removed.json()["tags"] == ["Language/Turkish"]
     repeated = client.post(
-        "/datasets/classification-cases/tags",
+        f"/dataset-ids/{dataset_id}/tags",
         json={"paths": ["Language/Turkish"]},
     )
     absent = client.request(
         "DELETE",
-        "/datasets/classification-cases/tags",
+        f"/dataset-ids/{dataset_id}/tags",
         json={"paths": ["Trendyol Cases/classification"]},
     )
     assert repeated.status_code == 200
     assert repeated.json()["tags"] == ["Language/Turkish"]
     assert absent.status_code == 200
     assert absent.json()["tags"] == ["Language/Turkish"]
-    assert client.get("/datasets/missing").status_code == 404
+    assert client.get("/dataset-ids/missing").status_code == 404
     assert client.get("/datasets", params={"tag": "Missing"}).status_code == 404
     assert (
-        client.post("/datasets/classification-cases/tags", json={"paths": ["Missing"]}).status_code
+        client.post(f"/dataset-ids/{dataset_id}/tags", json={"paths": ["Missing"]}).status_code
         == 404
     )
 
 
 def test_examples_are_paged(catalog_root: Path, client: TestClient) -> None:
-    _seed(catalog_root)
+    dataset_id = _seed(catalog_root)["classification-cases"]
 
-    first = client.get("/datasets/classification-cases/examples", params={"offset": 0, "limit": 1})
-    second = client.get("/datasets/classification-cases/examples", params={"offset": 1, "limit": 1})
+    first = client.get(f"/dataset-ids/{dataset_id}/examples", params={"offset": 0, "limit": 1})
+    second = client.get(f"/dataset-ids/{dataset_id}/examples", params={"offset": 1, "limit": 1})
     past_end = client.get(
-        "/datasets/classification-cases/examples",
+        f"/dataset-ids/{dataset_id}/examples",
         params={"offset": 10, "limit": 1},
     )
-    too_large = client.get("/datasets/classification-cases/examples", params={"limit": 101})
+    too_large = client.get(f"/dataset-ids/{dataset_id}/examples", params={"limit": 101})
 
     assert first.status_code == 200
     page = first.json()
@@ -128,8 +130,5 @@ def test_examples_are_paged(catalog_root: Path, client: TestClient) -> None:
     assert second.json()["examples"][0]["conversation"][0]["content"] == "beta"
     assert past_end.json()["examples"] == []
     assert too_large.status_code == 422
-    assert (
-        client.get("/datasets/classification-cases/examples", params={"limit": 0}).status_code
-        == 422
-    )
-    assert client.get("/datasets/missing/examples").status_code == 404
+    assert client.get(f"/dataset-ids/{dataset_id}/examples", params={"limit": 0}).status_code == 422
+    assert client.get("/dataset-ids/missing/examples").status_code == 404

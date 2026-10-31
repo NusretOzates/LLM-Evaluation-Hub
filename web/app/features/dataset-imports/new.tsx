@@ -8,6 +8,8 @@ import { TagPicker, toggleTagPath } from "../../shared/tag-picker";
 import { CatalogAlert } from "../../shared/feedback";
 import { Button } from "../../shared/controls";
 import { Dialog } from "../../shared/dialog";
+import { defaultOutput, type Output } from "../inference/api";
+import { OutputEditor } from "../inference/output-editor";
 import type { DatasetPreview, ImportLimits, SourceCoordinates, SourceSample } from "./contracts";
 import { ProcessorEditor } from "./processor-editor";
 import { getImport, getImportSources, loadSourceSample, runDatasetPreview, submitImport } from "./transport";
@@ -15,7 +17,7 @@ import type { Route } from "./+types/new";
 
 const STEPS = ["Details", "Source", "Processor", "Review"] as const;
 const RESERVED_SEGMENT_KEYS = ["source_index", "conversation", "tools", "expected_output", "extras"];
-const TEMPLATE = `def process(row: dict) -> dict | None:\n    # Return None to intentionally skip a source row.\n    return {\n        "conversation": [\n            {"role": "user", "content": row["text"]}\n        ],\n        "tools": [],\n        "expected_output": row.get("label"),\n        "segments": {},\n    }\n`;
+const TEMPLATE = templateFor([], ["text", "label"]);
 
 type Draft = {
   name: string;
@@ -24,6 +26,7 @@ type Draft = {
   row_limit: number;
   segment_keys: string[];
   code: string;
+  output_format: Output;
 };
 const initialDraft: Draft = {
   name: "",
@@ -32,6 +35,7 @@ const initialDraft: Draft = {
   row_limit: 10000,
   segment_keys: [],
   code: TEMPLATE,
+  output_format: defaultOutput,
 };
 
 export function meta() {
@@ -58,6 +62,7 @@ export default function NewDatasetImport({ loaderData }: Route.ComponentProps) {
   const [furthestStep, setFurthestStep] = useState(0);
   const [processorTab, setProcessorTab] = useState<"input" | "processor" | "preview">("processor");
   const [draft, setDraft] = useState<Draft>(initialDraft);
+  const [outputValid, setOutputValid] = useState(true);
   const [codeEdited, setCodeEdited] = useState(false);
   const [replacement, setReplacement] = useState<
     { kind: "columns"; columns: string[] } | { kind: "template"; mode: "none" | "source" | "json" } | null
@@ -111,6 +116,7 @@ export default function NewDatasetImport({ loaderData }: Route.ComponentProps) {
       row_limit: retry.spec.row_limit,
       segment_keys: [...retry.spec.segment_keys],
       code: retry.spec.source_code,
+      output_format: retry.spec.output_format,
     });
     setSample(null);
     setPreview(null);
@@ -260,7 +266,13 @@ export default function NewDatasetImport({ loaderData }: Route.ComponentProps) {
       setError("Run a fresh, valid preview before importing.");
       return;
     }
-    const payload = JSON.stringify({ preview_id: preview.id, name, tags: draft.tags });
+    if (!outputValid) return;
+    const payload = JSON.stringify({
+      preview_id: preview.id,
+      name,
+      tags: draft.tags,
+      output_format: draft.output_format,
+    });
     const replay = idempotencyPayload.current === payload && idempotencyKey.current !== null;
     setSubmitting(true);
     setError(null);
@@ -277,7 +289,7 @@ export default function NewDatasetImport({ loaderData }: Route.ComponentProps) {
       const key = (replay ? idempotencyKey.current : null) ?? crypto.randomUUID();
       idempotencyPayload.current = payload;
       idempotencyKey.current = key;
-      const job = await submitImport(preview.id, name, draft.tags, key);
+      const job = await submitImport(preview.id, name, draft.tags, key, draft.output_format);
       navigate(`/dataset-imports/${job.id}`);
     } catch (cause) {
       setError(message(cause));
@@ -689,6 +701,18 @@ export default function NewDatasetImport({ loaderData }: Route.ComponentProps) {
               <h2 id="review-heading">Review import</h2>
               <p>Check the pinned source, processor, segments and row-level output before import.</p>
             </header>
+            <section className="import-output-format" aria-labelledby="import-output-heading">
+              <h3 id="import-output-heading">Model output format</h3>
+              <p className="hint">
+                Choose the default response format for inference on this dataset. You can change it later in dataset
+                settings.
+              </p>
+              <OutputEditor
+                value={draft.output_format}
+                onChange={(output_format) => setDraft((current) => ({ ...current, output_format }))}
+                onValidityChange={setOutputValid}
+              />
+            </section>
             <ReviewSummary draft={draft} sample={sample} preview={preview} onEdit={setStep} />
             <p className="warning-note">
               Sample results do not guarantee full-import success. If any source row fails, the complete import is
@@ -741,7 +765,7 @@ export default function NewDatasetImport({ loaderData }: Route.ComponentProps) {
               <Button
                 variant="primary"
                 loading={submitting}
-                disabled={!livePreview}
+                disabled={!livePreview || !outputValid}
                 onClick={() => void submit()}
                 type="button"
               >
@@ -993,7 +1017,7 @@ function templateFor(keys: string[], columns: string[], toolsMode: "none" | "sou
       : "";
   const toolValue = toolsMode === "none" ? "[]" : toolsMode === "source" ? 'row.get("tools", [])' : "tools";
   const importJson = toolsMode === "json" ? "import json\n\n" : "";
-  return `${importJson}def process(row: dict) -> dict | None:\n${toolSetup}    # Return None to intentionally skip a source row.\n    return {\n        "conversation": [\n            {"role": "user", "content": row[${JSON.stringify(textColumn)}]}\n        ],\n        "tools": ${toolValue},\n        "expected_output": ${outputColumn},\n        "segments": {\n${segments}${segments ? "\n" : ""}        },\n    }\n`;
+  return `${importJson}def process(row: dict) -> dict | None:\n${toolSetup}    # Return None to intentionally skip a source row.\n    return {\n        "conversation": [\n            {"role": "user", "content": row[${JSON.stringify(textColumn)}]}\n        ],\n        "tools": ${toolValue},\n        "expected_output": ${outputColumn},\n        # Additional per-example context for judge prompts (JSON-compatible values).\n        "extras": {\n            # "rubric": row.get("rubric", ""),\n            # "context": row.get("context", ""),\n        },\n        "segments": {\n${segments}${segments ? "\n" : ""}        },\n    }\n`;
 }
 function message(error: unknown) {
   return error instanceof Error ? error.message : "The dataset import request failed.";

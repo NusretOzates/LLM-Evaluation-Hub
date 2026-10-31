@@ -164,7 +164,7 @@ test("cancellation survives refresh, is rediscoverable, and retry requires a fre
     timeout: 10_000,
   });
 
-  await page.getByRole("link", { name: "All import jobs" }).click();
+  await page.getByRole("link", { name: "Imports", exact: true }).click();
   await expect(page.getByRole("link", { name, exact: true })).toBeVisible();
   await page.getByRole("link", { name, exact: true }).click();
   await expect(page.locator('.topbar .job-state[data-state="cancelled"]')).toBeVisible();

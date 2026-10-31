@@ -15,15 +15,17 @@ The catalog routes do not register datasets or return `parquet_path`. The separa
 
 ## Operations
 
+`GET /health` returns `{"status":"ok"}` without reading SQLite or Parquet. Docker uses it to check API process responsiveness.
+
 | Method and path | Body | Success | Result |
 | --- | --- | --- | --- |
 | `GET /tags` | none | 200 | Tag forest |
 | `POST /tags` | Tag forest | 201 when any node is new, otherwise 200 | Same forest with `path` filled |
 | `GET /datasets` | none | 200 | Dataset array. Optional `tag` query includes descendants. |
-| `GET /datasets/{name}` | none | 200 | One dataset |
-| `POST /datasets/{name}/tags` | `{ "paths": ["A/B"] }` | 200 | Dataset after linking existing tags |
-| `DELETE /datasets/{name}/tags` | `{ "paths": ["A/B"] }` | 200 | Dataset after unlinking |
-| `GET /datasets/{name}/examples` | none | 200 | Page of stored rows |
+| `GET /dataset-ids/{id}` | none | 200 | One dataset |
+| `POST /dataset-ids/{id}/tags` | `{ "paths": ["A/B"] }` | 200 | Dataset after linking existing tags |
+| `DELETE /dataset-ids/{id}/tags` | `{ "paths": ["A/B"] }` | 200 | Dataset after unlinking |
+| `GET /dataset-ids/{id}/examples` | none | 200 | Page of stored rows |
 
 `paths` must contain at least one string. Example `offset` defaults to 0 and must be at least 0. Example `limit` defaults to 20 and must be from 1 through 100. `total` is `rows_kept` for that dataset, not the number of rows in the page.
 
@@ -69,12 +71,15 @@ The stored path for that leaf is `Trendyol Cases/Summarization`.
 
 ## Immutable identity and trust boundary
 
-Use `GET /dataset-ids/{id}`, `GET /dataset-ids/{id}/examples`, and `POST` or `DELETE /dataset-ids/{id}/tags` for arbitrary display names. Their response shapes, pagination and mutation semantics match the name-based endpoints. Missing IDs return 404. Existing `/datasets/{name}` endpoints remain available for compatibility with route-safe names; new workbench links use UUIDs.
+Dataset detail, example and tag endpoints accept immutable UUIDs through `/dataset-ids/{id}`. Names are display labels and Python registration identities, not HTTP lookup keys. Missing IDs return 404. Workbench links use UUIDs.
 
 The default browser interface is same-origin through `/api`. CORS is disabled unless `LLM_EVAL_ORIGINS` names explicit supported origins. This is a local, unauthenticated service. An origin allowlist is not authentication for nonbrowser clients and does not authorize remote exposure. Request-domain validation maps to 422. Stored-data/SQLite/filesystem failures map to a generic 500 without returning payload details. The OpenAPI schema is the source for `web/app/api-schema.ts`; runtime response parsing remains in the frontend HTTP boundary.
 
 ## Dataset imports
 
-The import router in `src/llm_evaluation_hub/api/import_routes.py` exposes `GET /dataset-sources`, `POST /dataset-source-samples`, `POST /dataset-previews`, `POST /dataset-imports`, `GET /dataset-imports`, `GET /dataset-imports/{job_id}`, `POST /dataset-imports/{job_id}/cancel`, and `GET /datasets/{dataset_id}/processor`. Submission returns `202`. The request and response models live in `src/llm_evaluation_hub/imports/contracts.py`; import-specific request validation omits submitted payload values from error responses.
+The import router in `src/llm_evaluation_hub/api/import_routes.py` exposes `GET /dataset-sources`, `POST /dataset-source-samples`, `POST /dataset-previews`, `POST /dataset-imports`, `GET /dataset-imports`, `GET /dataset-imports/{job_id}`, `POST /dataset-imports/{job_id}/cancel`, and `GET /dataset-ids/{dataset_id}/processor`. Submission returns `202`. The request and response models live in `src/llm_evaluation_hub/imports/contracts.py`; import-specific request validation omits submitted payload values from error responses.
 
 Source and preview operations return pinned coordinates and safe row diagnostics. A successful preview produces an expiring attestation bound to the source SHA, row limit, processor hash, segment keys, contract version, and runtime policy. Submission copies the full execution specification into a durable job. Job states are `queued`, `running`, `cancelling`, `succeeded`, `failed`, `cancelled`, and `interrupted`. The supervisor serializes cancellation with publication; only a completed job publishes a snapshot. See [Import a dataset in the workbench](../how-to/import-a-dataset.md) for the user workflow and [Core library](core.md) for execution limits.
+
+
+Inference profiles, dataset output metadata, request preview and tests, runs, results, cancellation and resume are described in [Inference runs](inference.md). The routes and typed request/response models are in `api/inference_routes.py` and `inference/contracts.py`.

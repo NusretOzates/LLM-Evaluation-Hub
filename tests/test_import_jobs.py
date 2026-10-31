@@ -19,7 +19,13 @@ from fastapi.testclient import TestClient
 from llm_evaluation_hub.api.app import create_app
 from llm_evaluation_hub.core.datasets.catalog import ImportStore
 from llm_evaluation_hub.core.datasets.processing import ProcessResult
-from llm_evaluation_hub.imports.contracts import Diagnostic, ImportSpec, SourceSpec
+from llm_evaluation_hub.imports.contracts import (
+    PROCESSOR_CONTRACT_VERSION,
+    RUNTIME_POLICY_VERSION,
+    Diagnostic,
+    ImportSpec,
+    SourceSpec,
+)
 from llm_evaluation_hub.imports.jobs import ImportSupervisor
 from llm_evaluation_hub.imports.runtime import RUNTIME_VERSION, ProcessorError
 
@@ -61,6 +67,8 @@ def spec(code: str = CODE, limit: int = 4) -> ImportSpec:
         source_code=code,
         source_hash=hashlib.sha256(code.encode()).hexdigest(),
         segment_keys=[],
+        processor_contract_version=PROCESSOR_CONTRACT_VERSION,
+        runtime_policy_version=RUNTIME_POLICY_VERSION,
         runtime_version=RUNTIME_VERSION,
     )
 
@@ -152,9 +160,9 @@ def test_cancellation_kills_descendants_and_reads_stay_responsive(tmp_path: Path
 
 def test_restart_preserves_queued_and_interrupts_running(tmp_path: Path) -> None:
     store = ImportStore(tmp_path)
-    active = store.create_job("prior", spec().model_dump(mode="json"), "prior")
+    active = store.create_job("prior", spec().model_dump(mode="json", by_alias=True), "prior")
     store.update_job(cast(str, active["id"]), state="running")
-    queued = store.create_job("queued", spec().model_dump(mode="json"), "queued")
+    queued = store.create_job("queued", spec().model_dump(mode="json", by_alias=True), "queued")
     supervisor = ImportSupervisor(tmp_path, SyntheticAdapter())
     supervisor.start()
     try:
@@ -345,7 +353,8 @@ def test_aggregate_limits_include_normalized_outputs(
     monkeypatch.setattr(worker, "MAX_AGGREGATE_BYTES", 60 if direction == "input" else 200)
     with pytest.raises((ProcessorError, RowProcessingError), match="exceeds 128 MiB"):
         worker.execute_import(
-            SyntheticAdapter(), {"spec": spec().model_dump(mode="json"), "staging": str(tmp_path)}
+            SyntheticAdapter(),
+            {"spec": spec().model_dump(mode="json", by_alias=True), "staging": str(tmp_path)},
         )
     assert not (tmp_path / "rows.parquet").exists()
 
@@ -360,7 +369,7 @@ def test_queue_admission_replay_and_queued_cancellation(tmp_path: Path) -> None:
         supervisor.submit("overflow", spec(), "overflow")
     assert supervisor.cancel(cast(str, first["id"]))["state"] == "cancelled"
     supervisor.submit("replacement", spec(), "replacement")
-    with pytest.raises(ProcessorError, match="attestation is incompatible"):
+    with pytest.raises(ProcessorError, match="specification is invalid"):
         supervisor.submit(
             "invalid-policy",
             spec().model_copy(update={"runtime_policy_version": "99"}),

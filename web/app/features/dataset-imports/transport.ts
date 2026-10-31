@@ -1,4 +1,5 @@
 import { CatalogError } from "../../shared/catalog-error";
+import type { Output } from "../inference/api";
 import { parseExample as parseCatalogExample } from "../../catalog-parsers";
 import type {
   DatasetPreview,
@@ -59,10 +60,11 @@ export async function submitImport(
   name: string,
   tags: string[],
   idempotency_key: string,
+  output_format: Output,
 ): Promise<ImportJob> {
   return request(
     "/dataset-imports",
-    { method: "POST", body: JSON.stringify({ preview_id, name, tags, idempotency_key }) },
+    { method: "POST", body: JSON.stringify({ preview_id, name, tags, idempotency_key, output_format }) },
     parseJob,
   );
 }
@@ -162,7 +164,13 @@ function parseJob(value: unknown): ImportJob {
   ];
   if (typeof value.state !== "string" || !states.includes(value.state as ImportJobState)) return invalid("job state");
   const spec = value.spec;
-  if (!Array.isArray(spec.segment_keys) || !Array.isArray(spec.tags)) return invalid("job specification");
+  if (
+    !Array.isArray(spec.segment_keys) ||
+    !Array.isArray(spec.tags) ||
+    spec.processor_contract_version !== "2" ||
+    spec.runtime_policy_version !== "1"
+  )
+    return invalid("job specification");
   return {
     id: string(value.id),
     name: string(value.name),
@@ -183,10 +191,20 @@ function parseJob(value: unknown): ImportJob {
       source_hash: string(spec.source_hash),
       segment_keys: spec.segment_keys.map(string),
       tags: spec.tags.map(string),
-      processor_contract_version: string(spec.processor_contract_version),
-      runtime_policy_version: string(spec.runtime_policy_version),
+      output_format: parseOutputFormat(spec.output_format),
+      processor_contract_version: spec.processor_contract_version,
+      runtime_policy_version: spec.runtime_policy_version,
       runtime_version: string(spec.runtime_version),
     },
+  };
+}
+function parseOutputFormat(value: unknown): Output {
+  if (!isRecord(value) || !["text", "json_object", "json_schema"].includes(string(value.kind)))
+    return invalid("output format");
+  return {
+    kind: value.kind as Output["kind"],
+    schema: value.schema === null ? null : jsonObject(value.schema),
+    strict: boolean(value.strict),
   };
 }
 function parseSource(value: unknown): SourceCoordinates {

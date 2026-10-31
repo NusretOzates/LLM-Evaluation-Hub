@@ -33,6 +33,12 @@ def repository(request: Request) -> DatasetRepository:
 Catalog = Annotated[DatasetRepository, Depends(repository)]
 
 
+@router.get("/health")
+async def health() -> dict[str, str]:
+    """Report process health without reading the catalog."""
+    return {"status": "ok"}
+
+
 @router.get("/tags")
 def list_tags(catalog: Catalog) -> dict[str, TagNode]:
     """Return the tag forest."""
@@ -103,44 +109,9 @@ def list_datasets(catalog: Catalog, tag: str | None = None) -> list[DatasetView]
     return [dataset_view(record) for record in catalog.list_datasets(tag=tag)]
 
 
-@router.get("/datasets/{name}")
-def get_dataset(name: str, catalog: Catalog) -> DatasetView:
-    """Return one dataset."""
-    return dataset_view(catalog.get(name))
-
-
-@router.post("/datasets/{name}/tags")
-def add_dataset_tags(name: str, body: TagPaths, catalog: Catalog) -> DatasetView:
-    """Link existing tags to a dataset."""
-    return dataset_view(catalog.add_tags(name, body.paths))
-
-
-@router.delete("/datasets/{name}/tags")
-def remove_dataset_tags(name: str, body: TagPaths, catalog: Catalog) -> DatasetView:
-    """Remove tag links from a dataset."""
-    return dataset_view(catalog.remove_tags(name, body.paths))
-
-
-@router.get("/datasets/{name}/examples")
-def list_examples(
-    name: str,
-    catalog: Catalog,
-    offset: Annotated[int, Query(ge=0)] = 0,
-    limit: Annotated[int, Query(ge=1, le=100)] = 20,
-) -> ExamplePage:
-    """Return one page of stored rows."""
-    record = catalog.get(name)
-    return ExamplePage(
-        total=record.rows_kept,
-        offset=offset,
-        limit=limit,
-        examples=catalog.examples(name, offset=offset, limit=limit),
-    )
-
-
 @router.get("/dataset-ids/{dataset_id}")
 def get_dataset_by_id(dataset_id: str, catalog: Catalog) -> DatasetView:
-    """Return metadata by immutable ID. Name-based endpoints remain compatible."""
+    """Return metadata by immutable ID."""
     return dataset_view(catalog.get_by_id(dataset_id))
 
 
@@ -164,4 +135,10 @@ def examples_by_id(
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> ExamplePage:
     """Return a snapshot page by immutable ID."""
-    return list_examples(catalog.get_by_id(dataset_id).name, catalog, offset, limit)
+    record = catalog.get_by_id(dataset_id)
+    return ExamplePage(
+        total=record.rows_kept,
+        offset=offset,
+        limit=limit,
+        examples=catalog.examples(record.name, offset=offset, limit=limit),
+    )

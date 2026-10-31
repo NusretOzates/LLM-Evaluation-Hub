@@ -1,7 +1,18 @@
 import { containDialogFocus } from "./shared/dialog";
 import { Skeleton } from "./shared/controls";
 import { useTheme, type ThemePreference } from "./shared/theme";
-import { Database, FilePlus2, PanelLeftClose, PanelLeftOpen, Tags, Menu, Trash2, Palette } from "lucide-react";
+import {
+  Cable,
+  PlayCircle,
+  Database,
+  FilePlus2,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Tags,
+  Menu,
+  Trash2,
+  Palette,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigation } from "react-router";
 
@@ -109,6 +120,24 @@ export function Shell({ datasets }: { datasets: Dataset[] }) {
 function Navigation({ count, collapsed, onNavigate }: { count: number; collapsed: boolean; onNavigate?: () => void }) {
   return (
     <nav aria-label="Sections" className="nav">
+      <NavLink
+        className="nav-link"
+        title={collapsed ? "Connections" : undefined}
+        to="/connections"
+        onClick={onNavigate}
+      >
+        <Cable aria-hidden="true" size={16} />
+        <span className="nav-label">Connections</span>
+      </NavLink>
+      <NavLink
+        className="nav-link"
+        title={collapsed ? "Inference runs" : undefined}
+        to="/inference"
+        onClick={onNavigate}
+      >
+        <PlayCircle aria-hidden="true" size={16} />
+        <span className="nav-label">Inference runs</span>
+      </NavLink>
       <NavLink className="nav-link" title={collapsed ? "Datasets" : undefined} to="/datasets" onClick={onNavigate}>
         <Database aria-hidden="true" size={16} />
         <span className="nav-label">Datasets</span>

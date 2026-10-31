@@ -68,7 +68,7 @@ page = repo.examples("trendyol-cases-multilingual", offset=0, limit=1)
 assert page[0].conversation[0].role == "system"
 ```
 
-The conversation preserves the messages returned by the processor. `GET /datasets/trendyol-cases-multilingual` on the API returns the same metadata, without `parquet_path`.
+The conversation preserves the messages returned by the processor. `GET /dataset-ids/{record.id}` on the API returns the same metadata, without `parquet_path`.
 
 ## Failures
 

@@ -25,7 +25,7 @@ Start here when a behavior change needs a file. Each row is one capability. Path
 | Docker stack | `compose.yaml` | `Dockerfile`, `web/Dockerfile`, `web/docker-entrypoint.sh`, `web/nginx.conf.template`, `docker/seed/` | Manual Compose empty/seed/restart smoke; see [Docker recipe](../how-to/run-with-docker.md) |
 | Dataset import workbench | routes `/dataset-imports/new`, `/dataset-imports`, `/dataset-imports/:id` | `web/app/features/dataset-imports/`, `web/app/api-schema.ts` | `web/tests/`, `web/e2e/` |
 | Workbench shell, catalog, and tags | routes `/datasets`, `/tags` | `web/app/shell.tsx:Shell`, `web/app/routes/datasets.tsx`, `web/app/routes/tags.tsx`, `web/app/shared/tag-picker.tsx`, `web/app/shared/catalog-view.ts` | `web/e2e/catalog-filter.spec.ts`, `web/e2e/tags-management.spec.ts`, `web/tests/catalog-view.test.ts` |
-| Row inspector | route `/datasets/:name` | `web/app/routes/dataset.tsx:DatasetPage`, `web/app/features/dataset-inspector/` | `web/e2e/catalog.spec.ts` |
+| Row inspector | route `/datasets/:id` | `web/app/routes/dataset.tsx:DatasetPage`, `web/app/features/dataset-inspector/` | `web/e2e/catalog.spec.ts` |
 | Workbench visual design | `web/app/app.css` | `web/app/styles/`, `web/app/root.tsx` font imports | `web/e2e/catalog.spec.ts` |
 
 Public Python imports for registration are `DatasetRepository`, `HfDatasetSource`, `DatasetSource`, and `ProcessedExample` from `llm_evaluation_hub.core.datasets`. Catalog errors are exported from `llm_evaluation_hub.core.datasets.catalog`, not from that package root. `create_app` is the public API constructor. The uvicorn factory is `llm_evaluation_hub.api.asgi:app`.
@@ -36,6 +36,7 @@ The workbench has unit tests in `web/tests/` and real API/browser tests in `web/
 | --- | --- | --- | --- |
 | Startup ownership | `catalog_lock` | `src/llm_evaluation_hub/core/datasets/catalog/storage.py` | `tests/api/test_seed.py` |
 | Transport types | `scripts/export_contract.py` | `web/app/api-schema.ts`, `catalog-types.ts`, `catalog-parsers.ts` | `web/tests/catalog.test.ts`, contract CI check |
+| Inference configuration, requests and runs | `inference.store:InferenceStore`, `inference.runner:Runner` | `src/llm_evaluation_hub/inference/`, `src/llm_evaluation_hub/api/inference_routes.py` | `tests/test_inference.py` |
 | Backup/restore | `scripts/catalog_backup.py` | `DatasetRepository.inspect_storage` | `tests/datasets/catalog/test_repository.py` |
 | Documentation checks | `scripts/check_docs.py` | `docs/` concepts and links | quality workflow |
 

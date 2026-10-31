@@ -17,7 +17,7 @@ from pydantic import (
 )
 
 _SEGMENT_KEY = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
-RESERVED_COLUMNS = frozenset({"source_index", "conversation", "expected_output", "extras"})
+RESERVED_COLUMNS = frozenset({"source_index", "conversation", "expected_output", "extras", "tools"})
 _JSON_SEPARATORS = (",", ":")
 
 

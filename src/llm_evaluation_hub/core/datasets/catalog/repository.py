@@ -13,6 +13,7 @@ import polars as pl
 from pydantic import BaseModel, ConfigDict
 
 from llm_evaluation_hub.core.datasets.catalog.errors import (
+    DatasetInUseError,
     DuplicateDatasetError,
     UnknownDatasetError,
 )
@@ -28,6 +29,7 @@ from llm_evaluation_hub.core.datasets.processing import (
     validate_segment_declaration,
 )
 from llm_evaluation_hub.core.datasets.records import (
+    JsonValue,
     ProcessedExample,
     decode_message,
     dump_json,
@@ -58,7 +60,7 @@ class DatasetRecord(BaseModel):
     segment_keys: list[str]
     tags: list[str]
     parquet_path: str
-    snapshot_format_version: int = 2
+    snapshot_format_version: int
 
 
 @dataclass(frozen=True)
@@ -77,6 +79,7 @@ class _NewDataset:
     parquet_path: str
     tags: tuple[str, ...]
     provenance: dict[str, object] | None
+    output_format: dict[str, JsonValue] | None
     import_id: str | None
 
 
@@ -147,6 +150,14 @@ class DatasetRepository:
                 return
             if row["trashed_at"] is None:
                 raise ValueError("dataset must be in trash before permanent deletion")
+            dependency = connection.execute(
+                "SELECT 1 FROM inference_run_datasets d JOIN inference_runs r ON r.id = d.run_id "
+                "WHERE d.dataset_id = ? AND r.state IN ('queued', "
+                "'running', 'interrupted', 'canceling') LIMIT 1",
+                (dataset_id,),
+            ).fetchone()
+            if dependency is not None:
+                raise DatasetInUseError("dataset is required by an unfinished inference run")
             canonical = f"datasets/{dataset_id}/rows.parquet"
             if row["parquet_path"] != canonical or str(uuid.UUID(dataset_id)) != dataset_id:
                 raise ValueError("snapshot is not at its owned path")
@@ -163,6 +174,9 @@ class DatasetRepository:
             )
             connection.execute(
                 "DELETE FROM processor_provenance WHERE dataset_id = ?", (dataset_id,)
+            )
+            connection.execute(
+                "DELETE FROM dataset_output_formats WHERE dataset_id = ?", (dataset_id,)
             )
             connection.execute("DELETE FROM dataset_tags WHERE dataset_id = ?", (dataset_id,))
             connection.execute(
@@ -231,6 +245,7 @@ class DatasetRepository:
         segments: Sequence[str] = (),
         limit: int | None = None,
         provenance: dict[str, object] | None = None,
+        output_format: dict[str, JsonValue] | None = None,
         dataset_id: str | None = None,
         import_id: str | None = None,
     ) -> DatasetRecord:
@@ -247,6 +262,8 @@ class DatasetRepository:
             raise EmptyDatasetError()
         if provenance is not None:
             parse_json_value(provenance)
+        if output_format is not None:
+            parse_json_value(output_format)
         dataset_id = str(uuid.uuid4()) if dataset_id is None else str(uuid.UUID(dataset_id))
         relative_path = f"datasets/{dataset_id}/rows.parquet"
         final_path = self._root / relative_path
@@ -266,6 +283,7 @@ class DatasetRepository:
             parquet_path=relative_path,
             tags=tag_paths,
             provenance=provenance,
+            output_format=output_format,
             import_id=import_id,
         )
         try:
@@ -374,7 +392,7 @@ class DatasetRepository:
             frame = scan.collect()
         else:
             frame = scan.slice(offset, limit).collect()
-        if record.snapshot_format_version not in (1, 2):
+        if record.snapshot_format_version != 2:
             raise ValueError(f"unsupported snapshot format: {record.snapshot_format_version}")
         examples: list[ProcessedExample] = []
         for row in frame.iter_rows(named=True):
@@ -385,11 +403,30 @@ class DatasetRepository:
                     conversation=conversation,
                     expected_output=None if expected is None else json.loads(expected),
                     extras=json.loads(row["extras"]),
-                    tools=json.loads(row["tools"]) if record.snapshot_format_version == 2 else [],
+                    tools=json.loads(row["tools"]),
                     segments={key: row[key] for key in record.segment_keys},
                 )
             )
         return examples
+
+    def inference_rows(
+        self, dataset_id: str, *, offset: int = 0, limit: int = 100
+    ) -> list[tuple[int, int, ProcessedExample]]:
+        """Read a bounded retained-row page by ID, including trashed snapshots."""
+        if offset < 0 or limit < 1:
+            raise ValueError("invalid row page")
+        record = self.get_by_id(dataset_id)
+        if record.snapshot_format_version != 2:
+            raise ValueError(f"unsupported snapshot format: {record.snapshot_format_version}")
+        frame = pl.scan_parquet(self._root / record.parquet_path).slice(offset, limit).collect()
+        result = []
+        for ordinal, row in enumerate(frame.iter_rows(named=True), start=offset):
+            example = ProcessedExample(
+                conversation=[decode_message(item) for item in json.loads(row["conversation"])],
+                tools=json.loads(row["tools"]),
+            )
+            result.append((ordinal, row["source_index"], example))
+        return result
 
     def _validate_request(self, name: str, processor_id: str, limit: int | None) -> None:
         """Reject an empty identity or a non-positive limit."""
@@ -459,6 +496,11 @@ class DatasetRepository:
                 ),
             )
             store.link(stored.dataset_id, stored.tags)
+            if stored.output_format is not None:
+                connection.execute(
+                    "INSERT INTO dataset_output_formats(dataset_id, payload) VALUES (?, ?)",
+                    (stored.dataset_id, dump_json(stored.output_format)),
+                )
             if stored.provenance is not None:
                 connection.execute(
                     "INSERT INTO processor_provenance(dataset_id, payload) VALUES (?, ?)",

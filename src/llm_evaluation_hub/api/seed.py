@@ -7,6 +7,7 @@ import tempfile
 from contextlib import closing
 from pathlib import Path
 
+from llm_evaluation_hub.core.datasets.catalog.schema import CATALOG_SCHEMA_VERSION
 from llm_evaluation_hub.core.datasets.catalog.storage import catalog_lock
 
 _STARTER = ".starter"
@@ -81,20 +82,14 @@ def _stage_catalog(seed: Path, catalog: Path) -> None:
         staged_database = stage / "catalog.sqlite"
         _backup_sqlite(seed / "catalog.sqlite", staged_database)
         with closing(sqlite3.connect(staged_database)) as connection, connection:
-            has_datasets = connection.execute(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='datasets'"
-            ).fetchone()
-            if has_datasets:
-                for dataset_id, relative in connection.execute(
-                    "SELECT id, parquet_path FROM datasets"
-                ):
-                    source_path = (seed / relative).resolve()
-                    if not source_path.is_relative_to(seed) or not source_path.is_file():
-                        raise RuntimeError("starter references a missing or unsafe snapshot")
-                    connection.execute(
-                        "UPDATE datasets SET parquet_path = ? WHERE id = ?",
-                        (f"{_STARTER}/{relative}", dataset_id),
-                    )
+            for dataset_id, relative in connection.execute("SELECT id, parquet_path FROM datasets"):
+                source_path = (seed / relative).resolve()
+                if not source_path.is_relative_to(seed) or not source_path.is_file():
+                    raise RuntimeError("starter references a missing or unsafe snapshot")
+                connection.execute(
+                    "UPDATE datasets SET parquet_path = ? WHERE id = ?",
+                    (f"{_STARTER}/{relative}", dataset_id),
+                )
         _require_integrity(staged_database)
         (stage / _MARKER).write_text(json.dumps({"format": 1, "target": str(catalog)}))
         stage.rename(catalog / _STARTER)
@@ -103,10 +98,6 @@ def _stage_catalog(seed: Path, catalog: Path) -> None:
 def _require_snapshots(database: Path, catalog: Path) -> None:
     """Check published paths before making metadata visible."""
     with closing(sqlite3.connect(database)) as connection:
-        if not connection.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='datasets'"
-        ).fetchone():
-            return
         for (relative,) in connection.execute("SELECT parquet_path FROM datasets"):
             path = (catalog / relative).resolve()
             if not path.is_relative_to(catalog / _STARTER) or not path.is_file():
@@ -118,10 +109,13 @@ def _require_integrity(database: Path) -> None:
     connection = sqlite3.connect(f"{database.as_uri()}?mode=ro", uri=True)
     try:
         row = connection.execute("PRAGMA integrity_check").fetchone()
+        version = connection.execute("PRAGMA user_version").fetchone()[0]
     finally:
         connection.close()
     if row is None or row[0] != "ok":
         raise RuntimeError("starter database failed integrity check")
+    if version != CATALOG_SCHEMA_VERSION:
+        raise RuntimeError(f"unsupported catalog schema version: {version}")
 
 
 def _backup_sqlite(source: Path, dest: Path) -> None:

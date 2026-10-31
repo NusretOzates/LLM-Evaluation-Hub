@@ -30,18 +30,18 @@ A source implements `DatasetSource` in `src/llm_evaluation_hub/core/datasets/sou
 
 ## Conversation record
 
-`ProcessedExample` requires a non-empty `conversation`. Available tool definitions are an optional per-example list, defaulting to `[]`. Each definition uses the canonical function envelope with a nonempty name and JSON-object `parameters`. Definitions are validated as bounded JSON data; the full JSON Schema dialect and arguments are not validated, and definitions are never executed. Conversations are preserved without inserting a system message. Segment names must match `[A-Za-z_][A-Za-z0-9_]*` and must not be `source_index`, `conversation`, `expected_output`, or `extras`.
+`ProcessedExample` requires a non-empty `conversation`. Available tool definitions are an optional per-example list, defaulting to `[]`. Each definition uses the canonical function envelope with a nonempty name and JSON-object `parameters`. Definitions are validated as bounded JSON data; the full JSON Schema dialect and arguments are not validated, and definitions are never executed. Conversations are preserved without inserting a system message. Segment names must match `[A-Za-z_][A-Za-z0-9_]*` and must not be `source_index`, `conversation`, `expected_output`, `extras`, or `tools`.
 
 `expected_output` is a JSON value or `None`. `None` is stored as a null column. The JSON text `null` is not used. `extras` is a JSON object for judge context. Message roles are `system`, `user`, `assistant`, and `tool`. The shapes and the empty-content rules are in [Stored snapshot](../data/snapshot.md).
 
 ## Repository
 
-`DatasetRepository(root)` creates `root` and `catalog.sqlite` when they are missing. Initialization uses a shared startup lock and configures WAL and schema version 1. Existing unversioned catalogs are initialized in place. Ordinary connections set foreign keys and a 5 second busy timeout without running schema DDL. Unknown future schema versions are rejected. After a process is killed, SQLite recovers committed database writes on reopening. This does not establish atomicity across SQLite and snapshot files. Methods that change or read the index:
+`DatasetRepository(root)` creates `root` and `catalog.sqlite` when they are missing. Initialization uses a shared startup lock and creates the current schema (version 5) with WAL enabled. Only empty databases and the current schema are accepted; older or unversioned catalogs are rejected without conversion. Ordinary connections set foreign keys and a 5 second busy timeout without running schema DDL. Other schema versions are rejected. After a process is killed, SQLite recovers committed database writes on reopening. This does not establish atomicity across SQLite and snapshot files. Methods that change or read the index:
 
 | Method | Effect |
 | --- | --- |
 | `create_tag(name, parent=None)` | Insert one node. Does not link a dataset. |
-| `delete_tag(path)` | Delete a node with no children and no dataset links. |
+| `delete_tag(path)` | Delete a subtree and its dataset links while keeping datasets. |
 | `ensure_path` / `ensure_paths` | Create missing nodes along paths. Return whether any node was new. |
 | `register(...)` | Read, process, write Parquet, insert the dataset. |
 | `add_tags` / `remove_tags` | Link or unlink existing tag paths. Nodes stay in the tree. |

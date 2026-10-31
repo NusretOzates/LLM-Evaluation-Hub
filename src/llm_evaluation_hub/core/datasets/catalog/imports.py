@@ -52,7 +52,7 @@ class ImportStore:
     """Persist import specifications and progress in the shared catalog database."""
 
     def __init__(self, root: Path) -> None:
-        """Use the catalog migration owner to initialize shared tables."""
+        """Use catalog initialization to create shared tables."""
         initialize_catalog(root)
         self._root = root
 

@@ -81,6 +81,12 @@ export function DatasetInspector({
           <h1>{dataset.name}</h1>
         </nav>
         <Summary dataset={dataset} />
+        <Link
+          className="control-button control-button-secondary"
+          to={`/dataset-ids/${encodeURIComponent(dataset.id)}/output-format`}
+        >
+          Output settings
+        </Link>
         <DatasetMenu dataset={dataset} />
         <button
           aria-label="Row list"

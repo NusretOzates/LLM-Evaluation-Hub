@@ -2,6 +2,7 @@
 
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
+from hashlib import sha256
 from pathlib import Path
 from time import monotonic, sleep
 
@@ -10,15 +11,77 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from llm_evaluation_hub.api import create_app
+from llm_evaluation_hub.core.datasets.processing import process_rows
+from llm_evaluation_hub.core.datasets.records import JsonValue, ProcessedExample
 from llm_evaluation_hub.imports.contracts import SampleRequest, SourceSpec
 from llm_evaluation_hub.imports.jobs import ImportSupervisor
 from llm_evaluation_hub.imports.previews import PreviewService
-from llm_evaluation_hub.imports.runtime import ProcessorError
+from llm_evaluation_hub.imports.runtime import RUNTIME_VERSION, ProcessorError
+from llm_evaluation_hub.imports.worker import validated_spec
 
 CODE = """def process(row):
     return {"conversation": [{"role": "user", "content": row["text"]}],
             "tools": row["tools"], "segments": {"language": "tr"}}
 """
+
+
+@pytest.mark.parametrize("kind", ["text", "json_object", "json_schema"])
+def test_import_output_format_is_published_with_dataset(tmp_path: Path, kind: str) -> None:
+    app = create_app(tmp_path)
+    supervisor: ImportSupervisor = app.state.import_supervisor
+    supervisor.store.put_preview(
+        "preview",
+        {
+            "source": {"repo_id": "org/data"},
+            "row_limit": 1,
+            "resolved_sha": "b" * 40,
+            "source_code": CODE,
+            "source_hash": sha256(CODE.encode()).hexdigest(),
+            "segment_keys": [],
+            "processor_contract_version": "2",
+            "runtime_policy_version": "1",
+            "runtime_version": RUNTIME_VERSION,
+        },
+        datetime.now(UTC) + timedelta(hours=1),
+    )
+    schema: dict[str, JsonValue] = {
+        "type": "object",
+        "properties": {"answer": {"type": "string"}},
+        "required": ["answer"],
+        "additionalProperties": False,
+    }
+    output = {"kind": kind, "schema": schema if kind == "json_schema" else None, "strict": True}
+    body = {
+        "preview_id": "preview",
+        "name": "output test",
+        "idempotency_key": "once",
+        "output_format": output,
+    }
+    # No runner is started: this checks admission and publication without executing a processor.
+    client = TestClient(app)
+    submitted = client.post("/dataset-imports", json=body)
+    assert submitted.status_code == 202, submitted.text
+    assert submitted.json()["spec"]["output_format"] == output
+    assert client.post("/dataset-imports", json=body).json()["id"] == submitted.json()["id"]
+    job = supervisor.store.get_job(submitted.json()["id"])
+    spec = validated_spec(job["spec"])
+    supervisor.store.update_job(str(job["id"]), state="running", phase="publishing")
+
+    def processor(row: dict[str, object]) -> ProcessedExample:
+        return ProcessedExample(conversation=[{"role": "user", "content": str(row["text"])}])
+
+    result = process_rows([{"text": "A question"}], processor, [])
+    with supervisor.store.decision_lock():
+        supervisor._publish(job, spec, result)
+    record = supervisor.repository.get("output test")
+    assert client.get(f"/dataset-ids/{record.id}/output-format").json() == output
+    assert client.get(f"/dataset-imports/{job['id']}").json()["state"] == "succeeded"
+    invalid = {**output, "kind": "json_schema", "schema": {**schema, "required": []}}
+    rejected = client.post(
+        "/dataset-imports", json={**body, "idempotency_key": "invalid", "output_format": invalid}
+    )
+    assert rejected.status_code == 422
+    assert len(supervisor.store.list_jobs()) == 1
 
 
 def tool(name: str) -> dict[str, object]:
@@ -114,7 +177,7 @@ def test_real_http_monty_import_tools_provenance_and_replay(import_client: TestC
     assert [row["segments"] for row in examples] == [{"language": "tr"}] * 3
     metadata = client.get(f"/dataset-ids/{job['dataset_id']}").json()
     assert metadata["tags"] == ["evaluation"]
-    provenance = client.get(f"/datasets/{job['dataset_id']}/processor").json()["provenance"]
+    provenance = client.get(f"/dataset-ids/{job['dataset_id']}/processor").json()["provenance"]
     assert provenance["source_code"] == CODE and provenance["resolved_sha"] == "b" * 40
     assert client.post(f"/dataset-imports/{job['id']}/cancel").json()["state"] == "succeeded"
 
@@ -145,9 +208,7 @@ def test_unknown_and_expired_ids_have_distinct_statuses(
     assert import_client.post(endpoint, json=body).status_code == 410
 
 
-def test_historical_and_current_jobs_remain_readable(
-    import_client: TestClient, application: FastAPI
-) -> None:
+def test_current_jobs_remain_readable(import_client: TestClient, application: FastAPI) -> None:
     identifier = attested(import_client)
     supervisor = application.state.import_supervisor
     assert isinstance(supervisor, ImportSupervisor)
@@ -156,20 +217,16 @@ def test_historical_and_current_jobs_remain_readable(
     spec = preview["spec"]
     assert isinstance(spec, dict)
     spec = {**spec, "tags": []}
-    old_spec = {**spec, "processor_contract_version": "1", "runtime_policy_version": "0"}
-    old = supervisor.store.create_job("old", old_spec, "old")
-    supervisor.store.update_job(str(old["id"]), state="failed", phase="failed")
     current = supervisor.store.create_job("current", spec, "current")
     supervisor.store.update_job(str(current["id"]), state="failed", phase="failed")
 
     response = import_client.get("/dataset-imports")
     assert response.status_code == 200, response.text
     jobs = {job["id"]: job for job in response.json()["jobs"]}
-    for job, expected in ((old, old_spec), (current, spec)):
-        detail = import_client.get(f"/dataset-imports/{job['id']}")
-        assert detail.status_code == 200, detail.text
-        assert detail.json()["spec"] == expected
-        assert jobs[job["id"]]["spec"] == expected
+    detail = import_client.get(f"/dataset-imports/{current['id']}")
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["spec"] == spec
+    assert jobs[current["id"]]["spec"] == spec
 
 
 @pytest.mark.parametrize(
@@ -244,8 +301,8 @@ def test_request_and_unexpected_errors_do_not_leak_secrets(
         response.status_code == 503 and secret not in response.text and "/home" not in response.text
     )
     # Default validation for the established catalog API retains the input field.
-    legacy = import_client.get("/datasets/missing/examples?limit=0")
-    assert legacy.status_code == 422 and "input" in legacy.json()["detail"][0]
+    invalid_page = import_client.get("/dataset-ids/missing/examples?limit=0")
+    assert invalid_page.status_code == 422 and "input" in invalid_page.json()["detail"][0]
 
 
 def test_unknown_jobs_and_unavailable_services(

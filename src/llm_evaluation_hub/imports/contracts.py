@@ -6,9 +6,10 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from llm_evaluation_hub.core.datasets.records import JsonValue, ProcessedExample
+from llm_evaluation_hub.inference.contracts import OutputFormat
 
-PROCESSOR_CONTRACT_VERSION = "2"
-RUNTIME_POLICY_VERSION = "1"
+PROCESSOR_CONTRACT_VERSION: Literal["2"] = "2"
+RUNTIME_POLICY_VERSION: Literal["1"] = "1"
 MAX_ROWS = 10_000
 SAMPLE_ROWS = 10
 
@@ -133,8 +134,9 @@ class ImportSpec(ImportModel):
     source_hash: str
     segment_keys: list[str]
     tags: list[str] = Field(default_factory=list)
-    processor_contract_version: str = PROCESSOR_CONTRACT_VERSION
-    runtime_policy_version: str = RUNTIME_POLICY_VERSION
+    output_format: OutputFormat = Field(default_factory=OutputFormat)
+    processor_contract_version: Literal["2"]
+    runtime_policy_version: Literal["1"]
     runtime_version: str
 
 
@@ -144,6 +146,7 @@ class CreateImportRequest(ImportModel):
     preview_id: str
     name: str = Field(min_length=1)
     tags: list[str] = Field(default_factory=list)
+    output_format: OutputFormat = Field(default_factory=OutputFormat)
     idempotency_key: str = Field(min_length=1, max_length=128)
 
     @field_validator("name")

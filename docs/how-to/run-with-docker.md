@@ -31,7 +31,7 @@ LLM_EVAL_WEB_PORT=8081 docker compose up --build
 
 Open `http://127.0.0.1:8081/datasets`. Keep `LLM_EVAL_WEB_PORT` set to the same value for subsequent `docker compose up` commands.
 
-The first start creates an empty catalog when the volume has no `catalog.sqlite`. A later start keeps that volume, including tag edits. The workbench starts listening after the API answers `GET /datasets`.
+The first start creates an empty catalog when the volume has no `catalog.sqlite`. A later start keeps that volume, including tag edits. The workbench starts listening after the API answers `GET /health`. Both containers check their lightweight `/health` endpoints every 30 seconds. These checks do not read the dataset catalog; the web check is omitted from nginx access logs.
 
 3. Stop the containers when you are done:
 

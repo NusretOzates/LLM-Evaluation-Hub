@@ -7,10 +7,24 @@ export type AssistantMessage = {
   "thinking"?: string | null;
 };
 
+export type ConnectionProfile = {
+  "id"?: string;
+  "name": string;
+  "base_url": string;
+  "model": string;
+  "api_key_env"?: string | null;
+  "reasoning_mode"?: "effort" | "thinking";
+  "effort_levels"?: Array<string>;
+  "effort_path"?: string;
+  "thinking_path"?: string;
+  "max_tokens_field"?: "max_completion_tokens" | "max_tokens";
+};
+
 export type CreateImportRequest = {
   "preview_id": string;
   "name": string;
   "tags"?: Array<string>;
+  "output_format"?: OutputFormat_Input;
   "idempotency_key": string;
 };
 
@@ -49,12 +63,33 @@ export type ExamplePage = {
   "examples": Array<ProcessedExample>;
 };
 
+export type FrozenDataset = {
+  "id": string;
+  "name": string;
+  "snapshot_format_version": number;
+  "rows": number;
+  "output": OutputFormat_Output;
+  "completed": number;
+  "errors": number;
+  "input_available": boolean;
+};
+
 export type FunctionCall = {
   "name": string;
-  "arguments": { [key: string]: JsonValue };
+  "arguments": { [key: string]: JsonValue_Output };
 };
 
 export type FunctionDefinition = { [key: string]: unknown };
+
+export type Generation = {
+  "max_tokens"?: number | null;
+  "temperature"?: number | null;
+  "top_p"?: number | null;
+  "seed"?: number | null;
+  "effort"?: string | null;
+  "thinking"?: boolean | null;
+  "advanced"?: { [key: string]: JsonValue_Input };
+};
 
 export type HTTPValidationError = {
   "detail"?: Array<ValidationError>;
@@ -74,9 +109,27 @@ export type ImportSpec = {
   "source_hash": string;
   "segment_keys": Array<string>;
   "tags"?: Array<string>;
-  "processor_contract_version"?: string;
-  "runtime_policy_version"?: string;
+  "output_format"?: OutputFormat_Output;
+  "processor_contract_version": "2";
+  "runtime_policy_version": "1";
   "runtime_version": string;
+};
+
+export type InferenceExampleRequest = {
+  "profile_id": string;
+  "dataset_id": string;
+  "ordinal"?: number;
+  "generation"?: Generation;
+  "output"?: OutputFormat_Input;
+  "timeout_seconds"?: number;
+  "retries"?: number;
+  "rpm"?: number;
+};
+
+export type InferenceInput = {
+  "ordinal": number;
+  "source_index": number;
+  "example": ProcessedExample;
 };
 
 export type JobList = {
@@ -98,12 +151,26 @@ export type JobView = {
   "spec": ImportSpec;
 };
 
-export type JsonValue = string | boolean | number | number | Array<JsonValue> | { [key: string]: JsonValue } | null;
+export type JsonValue_Input = string | boolean | number | number | Array<JsonValue_Input> | { [key: string]: JsonValue_Input } | null;
+
+export type JsonValue_Output = string | boolean | number | number | Array<JsonValue_Output> | { [key: string]: JsonValue_Output } | null;
 
 export type MediaPart = {
   "type": "image" | "video" | "audio";
   "url"?: string | null;
   "path"?: string | null;
+};
+
+export type OutputFormat_Input = {
+  "kind"?: "text" | "json_object" | "json_schema";
+  "schema"?: { [key: string]: JsonValue_Input } | null;
+  "strict"?: boolean;
+};
+
+export type OutputFormat_Output = {
+  "kind"?: "text" | "json_object" | "json_schema";
+  "schema"?: { [key: string]: JsonValue_Output } | null;
+  "strict"?: boolean;
 };
 
 export type PreviewRequest = {
@@ -132,14 +199,62 @@ export type PreviewView = {
 
 export type ProcessedExample = {
   "conversation": Array<SystemMessage | UserMessage | AssistantMessage | ToolMessage>;
-  "expected_output"?: JsonValue | null;
+  "expected_output"?: JsonValue_Output | null;
   "tools"?: Array<ToolDefinition>;
-  "extras"?: { [key: string]: JsonValue };
+  "extras"?: { [key: string]: JsonValue_Output };
   "segments"?: { [key: string]: string };
 };
 
 export type ProcessorView = {
-  "provenance": { [key: string]: JsonValue } | null;
+  "provenance": { [key: string]: JsonValue_Output } | null;
+};
+
+export type ResultPage = {
+  "results": Array<RowResult>;
+  "total": number;
+  "offset": number;
+  "limit": number;
+};
+
+export type RowResult = {
+  "dataset_id": string;
+  "ordinal": number;
+  "source_index": number;
+  "status": string;
+  "raw_response"?: JsonValue_Output;
+  "content"?: string | null;
+  "tool_calls"?: JsonValue_Output;
+  "parsed"?: JsonValue_Output;
+  "validation_errors"?: Array<string>;
+  "finish_reason"?: string | null;
+  "usage"?: JsonValue_Output;
+  "latency_ms"?: number | null;
+  "attempts"?: number;
+  "error"?: string | null;
+};
+
+export type RunSpec = {
+  "dataset_ids"?: Array<string>;
+  "tags"?: Array<string>;
+  "profile_id": string;
+  "generation"?: Generation;
+  "output_overrides"?: { [key: string]: OutputFormat_Input };
+  "concurrency"?: number;
+  "rpm"?: number;
+  "timeout_seconds"?: number;
+  "retries"?: number;
+};
+
+export type RunView = {
+  "id": string;
+  "state": string;
+  "error"?: string | null;
+  "created_at": string;
+  "updated_at": string;
+  "spec": { [key: string]: JsonValue_Output };
+  "completed": number;
+  "total": number;
+  "datasets"?: Array<FrozenDataset>;
 };
 
 export type SampleRequest = {
@@ -152,7 +267,7 @@ export type SampleView = {
   "source": SourceSpec;
   "resolved_sha": string;
   "row_limit": number;
-  "rows": Array<{ [key: string]: JsonValue }>;
+  "rows": Array<{ [key: string]: JsonValue_Output }>;
   "columns": Array<SourceColumn>;
   "expires_at": string;
 };
@@ -239,3 +354,5 @@ export type ValidationError = {
   "input"?: unknown;
   "ctx"?: { [key: string]: unknown };
 };
+
+export type JsonValue = JsonValue_Output;

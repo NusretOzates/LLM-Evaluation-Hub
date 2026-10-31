@@ -52,7 +52,7 @@ class OperationError(ProcessorError):
 def _wire(job: dict[str, object]) -> dict[str, object]:
     """Drop internal scheduler identities at the transport boundary."""
     return JobView.model_validate({key: job[key] for key in JobView.model_fields}).model_dump(
-        mode="json"
+        mode="json", by_alias=True
     )
 
 
@@ -138,7 +138,7 @@ class ImportSupervisor:
         self, name: str, spec: ImportSpec | dict[str, object], idempotency_key: str
     ) -> dict[str, object]:
         """Persist accepted immutable work, enforcing replay and queue admission."""
-        checked = validated_spec(spec).model_dump(mode="json")
+        checked = validated_spec(spec).model_dump(mode="json", by_alias=True)
         with self._admission:
             # Replays remain accepted when the queue is full.
             jobs = self.store.list_jobs()
@@ -285,7 +285,7 @@ class ImportSupervisor:
             logger.info("Import processing started; job=%s", job_id)
             counts = self._execute(
                 "import",
-                {"spec": spec.model_dump(mode="json"), "staging": str(staging)},
+                {"spec": spec.model_dump(mode="json", by_alias=True), "staging": str(staging)},
                 time.monotonic() + IMPORT_TIMEOUT,
                 job_id,
             )
@@ -321,7 +321,7 @@ class ImportSupervisor:
             revision=spec.source.revision,
             resolved_sha=spec.resolved_sha,
         )
-        provenance = spec.model_dump(mode="json") | {"import_id": job["id"]}
+        provenance = spec.model_dump(mode="json", by_alias=True) | {"import_id": job["id"]}
         self.repository.register_processed(
             str(job["name"]),
             result,
@@ -331,6 +331,7 @@ class ImportSupervisor:
             segments=spec.segment_keys,
             limit=spec.row_limit,
             provenance=provenance,
+            output_format=spec.output_format.model_dump(mode="json", by_alias=True),
             dataset_id=str(job["candidate_dataset_id"]),
             import_id=str(job["id"]),
         )
