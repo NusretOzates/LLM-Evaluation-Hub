@@ -1,24 +1,29 @@
-import { Database, FilePlus2, PanelLeftClose, PanelLeftOpen, Plus, Tags } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { Link, NavLink, Outlet, useFetcher, useLocation, useNavigation, useSearchParams } from "react-router";
+import { containDialogFocus } from "./shared/dialog";
+import { Skeleton } from "./shared/controls";
+import { useTheme, type ThemePreference } from "./shared/theme";
+import { Database, FilePlus2, PanelLeftClose, PanelLeftOpen, Tags, Menu, Trash2, Palette } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { NavLink, Outlet, useLocation, useNavigation } from "react-router";
 
-import type { Dataset, TagNode } from "./catalog";
+import type { Dataset } from "./catalog";
 import { useShortcut, useStoredFlag } from "./shared/browser";
-import { subtreeCounts } from "./shared/catalog-view";
 
-export type TagActionData = { error: string } | { created: true };
-
-export function Shell({ datasets, tags }: { datasets: Dataset[]; tags: Record<string, TagNode> }) {
+export function Shell({ datasets }: { datasets: Dataset[] }) {
+  const { preference, setPreference } = useTheme();
+  const [drawer, setDrawer] = useState(false);
+  const drawerRef = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    if (drawer) drawerRef.current?.showModal();
+    else drawerRef.current?.close();
+  }, [drawer]);
   const navigation = useNavigation();
   const location = useLocation();
-  const [params] = useSearchParams();
   const inspecting = /^\/datasets\/.+/.test(location.pathname);
   const [listCollapsed, setListCollapsed] = useStoredFlag("sidebar-collapsed", false);
   const [detailCollapsed, setDetailCollapsed] = useStoredFlag("sidebar-collapsed-detail", true);
   const collapsed = inspecting ? detailCollapsed : listCollapsed;
   const setCollapsed = inspecting ? setDetailCollapsed : setListCollapsed;
   useShortcut("[", () => setCollapsed((value) => !value));
-  const selected = location.pathname === "/datasets" ? params.get("tag") : null;
   return (
     <div className="shell" data-sidebar={collapsed ? "collapsed" : "open"}>
       <aside aria-label="Sidebar" className="sidebar">
@@ -39,34 +44,61 @@ export function Shell({ datasets, tags }: { datasets: Dataset[]; tags: Record<st
             )}
           </button>
         </div>
-        <nav aria-label="Sections" className="nav">
-          <NavLink className="nav-link" title={collapsed ? "Datasets" : undefined} to="/datasets">
-            <Database aria-hidden="true" size={15} strokeWidth={1.75} />
-            <span className="nav-label">Datasets</span>
-            <span className="nav-count mono">{datasets.length}</span>
-          </NavLink>{" "}
-          <NavLink className="nav-link" title={collapsed ? "Dataset imports" : undefined} to="/dataset-imports">
-            <FilePlus2 aria-hidden="true" size={15} strokeWidth={1.75} />
-            <span className="nav-label">Imports</span>
+        <Navigation count={datasets.length} collapsed={collapsed} />
+        <nav className="utility-nav" aria-label="Utilities">
+          <NavLink className="nav-link" title={collapsed ? "Trash" : undefined} to="/trash">
+            <Trash2 aria-hidden="true" size={16} />
+            <span className="nav-label">Trash</span>
           </NavLink>
         </nav>
-        {collapsed ? (
-          <div className="rail-tags">
-            <button
-              aria-label={selected === null ? "Show tags" : `Show tags, filtered by ${selected}`}
-              className="icon-button"
-              data-active={selected !== null}
-              onClick={() => setCollapsed(false)}
-              title="Show tags"
-              type="button"
-            >
-              <Tags aria-hidden="true" size={15} strokeWidth={1.75} />
-            </button>
-          </div>
-        ) : (
-          <TagSection datasets={datasets} selected={selected} tags={tags} />
-        )}
+        <details className="appearance">
+          <summary aria-label="Appearance">
+            <Palette size={16} aria-hidden="true" />
+            <span>Appearance</span>
+          </summary>
+          <label>
+            Theme{" "}
+            <select value={preference} onChange={(event) => setPreference(event.target.value as ThemePreference)}>
+              <option value="system">System</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+          </label>
+        </details>
       </aside>
+      <button className="mobile-menu-button" type="button" onClick={() => setDrawer(true)}>
+        <Menu size={18} /> Menu
+      </button>
+      <dialog
+        onKeyDown={containDialogFocus}
+        className="navigation-drawer"
+        ref={drawerRef}
+        onCancel={(event) => {
+          event.preventDefault();
+          setDrawer(false);
+        }}
+      >
+        <div className="brand">
+          <span>Evaluation hub</span>
+          <button type="button" onClick={() => setDrawer(false)}>
+            Close
+          </button>
+        </div>
+        <Navigation count={datasets.length} collapsed={false} onNavigate={() => setDrawer(false)} />
+        <nav className="nav" aria-label="Utilities">
+          <NavLink className="nav-link" to="/trash" onClick={() => setDrawer(false)}>
+            <Trash2 aria-hidden="true" size={16} /> Trash
+          </NavLink>
+        </nav>
+        <label>
+          Appearance{" "}
+          <select value={preference} onChange={(event) => setPreference(event.target.value as ThemePreference)}>
+            <option value="system">System</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </label>
+      </dialog>
       <main className="workspace" data-loading={navigation.state === "loading"}>
         <Outlet />
       </main>
@@ -74,118 +106,28 @@ export function Shell({ datasets, tags }: { datasets: Dataset[]; tags: Record<st
   );
 }
 
-function TagSection({
-  datasets,
-  selected,
-  tags,
-}: {
-  datasets: Dataset[];
-  selected: string | null;
-  tags: Record<string, TagNode>;
-}) {
-  const fetcher = useFetcher<TagActionData>();
-  const [adding, setAdding] = useState(false);
-  const created = fetcher.data !== undefined && "created" in fetcher.data;
-  const error = fetcher.data !== undefined && "error" in fetcher.data ? fetcher.data.error : null;
-  const parentName = selected?.split("/").at(-1) ?? null;
-  const counts = useMemo(() => subtreeCounts(datasets), [datasets]);
-
-  useEffect(() => {
-    if (created && fetcher.state === "idle") setAdding(false);
-  }, [created, fetcher.state]);
-
+function Navigation({ count, collapsed, onNavigate }: { count: number; collapsed: boolean; onNavigate?: () => void }) {
   return (
-    <section aria-labelledby="tags-heading" className="tag-section">
-      <div className="section-head">
-        <h2 id="tags-heading">Tags</h2>
-        <button
-          aria-expanded={adding}
-          aria-label="New tag"
-          className="icon-button"
-          onClick={() => setAdding((value) => !value)}
-          type="button"
-        >
-          <Plus aria-hidden="true" size={14} strokeWidth={1.75} />
-        </button>
-      </div>
-      {adding ? (
-        <fetcher.Form action="/datasets" className="tag-new" method="post">
-          <input name="parent" type="hidden" value={selected ?? ""} />
-          <input
-            aria-describedby="tag-new-hint"
-            aria-label="Tag name"
-            autoComplete="off"
-            autoFocus
-            name="name"
-            onKeyDown={(event) => {
-              if (event.key === "Escape") setAdding(false);
-            }}
-            placeholder="Tag name"
-            required
-          />
-          <p className="hint" id="tag-new-hint">
-            {parentName === null ? "Adds a top-level tag." : `Adds a tag inside ${parentName}.`}
-          </p>
-          {error === null ? null : (
-            <p className="field-error" role="alert">
-              {error}
-            </p>
-          )}
-        </fetcher.Form>
-      ) : null}
-      <div className="tag-scroll">
-        {Object.keys(tags).length === 0 ? (
-          <p className="hint tag-empty">Tags group datasets. Use + to add the first one.</p>
-        ) : (
-          <TagTree counts={counts} nodes={tags} selected={selected} />
-        )}
-      </div>
-    </section>
-  );
-}
-
-function TagTree({
-  counts,
-  nodes,
-  selected,
-}: {
-  counts: Map<string, number>;
-  nodes: Record<string, TagNode>;
-  selected: string | null;
-}) {
-  const names = Object.keys(nodes).sort((a, b) => a.localeCompare(b));
-  return (
-    <ul className="tag-tree">
-      {names.map((name) => {
-        const node = nodes[name];
-        if (node === undefined) return null;
-        const current = node.path === selected;
-        return (
-          <li key={node.path}>
-            <Link
-              aria-current={current ? "true" : undefined}
-              className="tag-link"
-              to={current ? "/datasets" : `/datasets?tag=${encodeURIComponent(node.path)}`}
-            >
-              <span className="tag-name">{name}</span>
-              <span className="tag-count mono">{counts.get(node.path) ?? 0}</span>
-            </Link>
-            {Object.keys(node.children).length > 0 ? (
-              <TagTree counts={counts} nodes={node.children} selected={selected} />
-            ) : null}
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
-export function CatalogAlert({ error }: { error: unknown }) {
-  const message = error instanceof Error ? error.message : "The catalog could not be loaded.";
-  return (
-    <p className="alert" role="alert">
-      {message}
-    </p>
+    <nav aria-label="Sections" className="nav">
+      <NavLink className="nav-link" title={collapsed ? "Datasets" : undefined} to="/datasets" onClick={onNavigate}>
+        <Database aria-hidden="true" size={16} />
+        <span className="nav-label">Datasets</span>
+        <span className="nav-count mono">{count}</span>
+      </NavLink>
+      <NavLink
+        className="nav-link"
+        title={collapsed ? "Imports" : undefined}
+        to="/dataset-imports"
+        onClick={onNavigate}
+      >
+        <FilePlus2 aria-hidden="true" size={16} />
+        <span className="nav-label">Imports</span>
+      </NavLink>
+      <NavLink className="nav-link" title={collapsed ? "Tags" : undefined} to="/tags" onClick={onNavigate}>
+        <Tags aria-hidden="true" size={16} />
+        <span className="nav-label">Tags</span>
+      </NavLink>
+    </nav>
   );
 }
 
@@ -198,7 +140,7 @@ export function ShellSkeleton() {
         </div>
         <div className="skeleton-stack">
           {Array.from({ length: 5 }, (_, index) => (
-            <div className="skeleton skeleton-nav" key={index} />
+            <Skeleton className="skeleton-nav" key={index} />
           ))}
         </div>
       </aside>
@@ -208,7 +150,7 @@ export function ShellSkeleton() {
         </header>
         <div className="skeleton-stack skeleton-table">
           {Array.from({ length: 8 }, (_, index) => (
-            <div className="skeleton skeleton-row" key={index} />
+            <Skeleton className="skeleton-row" key={index} />
           ))}
         </div>
       </main>

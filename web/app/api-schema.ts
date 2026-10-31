@@ -109,7 +109,6 @@ export type MediaPart = {
 export type PreviewRequest = {
   "sample_id": string;
   "source_code": string;
-  "segment_keys"?: Array<string>;
 };
 
 export type PreviewRow = {
@@ -189,6 +188,11 @@ export type SystemMessage = {
 export type TagBranch = {
   "path"?: string | null;
   "children"?: { [key: string]: TagBranch };
+};
+
+export type TagDeletion = {
+  "path": string;
+  "promote_children"?: boolean;
 };
 
 export type TagNode = {

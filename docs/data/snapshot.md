@@ -35,7 +35,7 @@ Rows preserve source order. `examples(offset, limit)` offsets count retained row
 
 ## Conversation messages
 
-A conversation is nonempty. An empty system message is prepended if the first message is not system. Unknown message fields are rejected by the backend.
+A conversation is nonempty. Messages are preserved without adding a system message. Unknown message fields are rejected by the backend.
 
 | Role | Fields and invariants |
 | --- | --- |

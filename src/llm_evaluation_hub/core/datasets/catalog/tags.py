@@ -8,7 +8,6 @@ from pydantic import BaseModel, ConfigDict
 
 from llm_evaluation_hub.core.datasets.catalog.errors import (
     DuplicateTagError,
-    TagInUseError,
     UnknownTagError,
 )
 
@@ -91,20 +90,56 @@ class TagStore:
             raise UnknownTagError(path)
         return row
 
-    def delete(self, path: str) -> None:
-        """Delete a tag that has no children and no dataset links."""
+    def impact(self, path: str) -> tuple[list[str], int]:
+        """Return subtree paths and the number of distinct linked datasets."""
+        ids = self.descendant_ids(path)
+        marks = ", ".join("?" for _ in ids)
+        rows = self._connection.execute(
+            f"SELECT path FROM tags WHERE id IN ({marks}) ORDER BY path", ids
+        ).fetchall()
+        count = self._connection.execute(
+            f"SELECT COUNT(DISTINCT dataset_id) FROM dataset_tags WHERE tag_id IN ({marks})", ids
+        ).fetchone()[0]
+        return [row["path"] for row in rows], count
+
+    def delete(self, path: str, *, promote_children: bool = False) -> None:
+        """Delete a subtree or promote its children while preserving their identities."""
         row = self.require(path)
-        child = self._connection.execute(
-            "SELECT 1 FROM tags WHERE parent_id = ?",
-            (row["id"],),
-        ).fetchone()
-        link = self._connection.execute(
-            "SELECT 1 FROM dataset_tags WHERE tag_id = ?",
-            (row["id"],),
-        ).fetchone()
-        if child is not None or link is not None:
-            raise TagInUseError(path)
-        self._connection.execute("DELETE FROM tags WHERE id = ?", (row["id"],))
+        ids = self.descendant_ids(path)
+        if promote_children:
+            descendants = self._connection.execute(
+                "SELECT id, path FROM tags WHERE path LIKE ? ESCAPE '\\' ORDER BY length(path)",
+                (path.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "/%",),
+            ).fetchall()
+            parent = path.rpartition("/")[0]
+            replacements = [
+                (item["id"], (parent + "/" if parent else "") + item["path"][len(path) + 1 :])
+                for item in descendants
+            ]
+            for _, destination in replacements:
+                existing = self._connection.execute(
+                    "SELECT id FROM tags WHERE path = ?", (destination,)
+                ).fetchone()
+                if existing is not None and existing["id"] not in ids:
+                    raise DuplicateTagError(destination)
+            self._connection.execute("DELETE FROM dataset_tags WHERE tag_id = ?", (row["id"],))
+            self._connection.execute(
+                "UPDATE tags SET parent_id = ? WHERE parent_id = ?", (row["parent_id"], row["id"])
+            )
+            self._connection.execute("DELETE FROM tags WHERE id = ?", (row["id"],))
+            for tag_id, _ in replacements:
+                self._connection.execute(
+                    "UPDATE tags SET path = ? WHERE id = ?", (f"/__moving__/{uuid.uuid4()}", tag_id)
+                )
+            for tag_id, destination in replacements:
+                self._connection.execute(
+                    "UPDATE tags SET path = ? WHERE id = ?", (destination, tag_id)
+                )
+        else:
+            marks = ", ".join("?" for _ in ids)
+            self._connection.execute(f"DELETE FROM dataset_tags WHERE tag_id IN ({marks})", ids)
+            for tag_id in reversed(ids):
+                self._connection.execute("DELETE FROM tags WHERE id = ?", (tag_id,))
 
     def descendant_ids(self, path: str) -> list[str]:
         """Return the tag id and the ids of every tag below it."""

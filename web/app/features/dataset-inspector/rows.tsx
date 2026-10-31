@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import type { ExamplePage } from "../../catalog-types";
 import { useShortcut } from "../../shared/browser";
@@ -15,6 +15,8 @@ export function RowIndex({
   page: ExamplePage;
   selected: number | null;
 }) {
+  const segmentId = useId();
+  const valueId = useId();
   const listRef = useRef<HTMLOListElement>(null);
   const filterRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
@@ -23,7 +25,8 @@ export function RowIndex({
   const end = page.offset + page.examples.length;
   const hasPrevious = page.offset > 0;
   const hasNext = page.offset + PAGE_SIZE < page.total;
-  const facetKey = page.examples[0] === undefined ? null : (Object.keys(page.examples[0].segments)[0] ?? null);
+  const facetKeys = [...new Set(page.examples.flatMap((example) => Object.keys(example.segments)))];
+  const [facetKey, setFacetKey] = useState<string | null>(() => facetKeys[0] ?? null);
   const facets = facetValues(page.examples, facetKey);
   const items = page.examples
     .map((example, index) => ({ example, row: page.offset + index + 1 }))
@@ -38,6 +41,9 @@ export function RowIndex({
 
   return (
     <section aria-labelledby="rows-heading" className="row-index">
+      <p className="page-range">
+        {formatCount(start)}–{formatCount(end)} of {formatCount(page.total)}
+      </p>
       <div className="index-bar">
         <h2 className="sr-only" id="rows-heading">
           Rows
@@ -53,7 +59,9 @@ export function RowIndex({
             }
           }}
         >
+          <label htmlFor="row-search">Search this page</label>
           <input
+            id="row-search"
             aria-label="Filter rows or go to a row number"
             autoComplete="off"
             onChange={(event) => setQuery(event.target.value)}
@@ -62,39 +70,47 @@ export function RowIndex({
             value={query}
           />
         </form>
-        <nav aria-label="Row pages" className="pager">
-          <span className="sr-only">
-            {formatCount(start)}–{formatCount(end)} of {formatCount(page.total)}
-          </span>
-          <PageLink
-            disabled={!hasPrevious}
-            label="Previous page"
-            to={`?offset=${Math.max(0, page.offset - PAGE_SIZE)}`}
-          >
-            <ChevronLeft aria-hidden="true" size={15} strokeWidth={1.75} />
-          </PageLink>
-          <PageLink disabled={!hasNext} label="Next page" to={`?offset=${page.offset + PAGE_SIZE}`}>
-            <ChevronRight aria-hidden="true" size={15} strokeWidth={1.75} />
-          </PageLink>
-        </nav>
       </div>
-      {facets.length > 1 && facets.length <= 8 ? (
-        <fieldset className="facet-bar" aria-label={facetKey ?? "Segments"}>
-          <button aria-pressed={facet === null} className="facet" onClick={() => setFacet(null)} type="button">
-            All
-          </button>
-          {facets.map((value) => (
-            <button
-              aria-pressed={facet === value}
-              className="facet"
-              key={value}
-              onClick={() => setFacet((current) => (current === value ? null : value))}
-              type="button"
+      {facetKeys.length > 0 ? (
+        <div className="segment-filters">
+          <div className="segment-field">
+            <label htmlFor={segmentId}>Segment</label>
+            <select
+              id={segmentId}
+              value={facetKey ?? ""}
+              onChange={(event) => {
+                setFacetKey(event.target.value || null);
+                setFacet(null);
+              }}
             >
-              {value}
-            </button>
-          ))}
-        </fieldset>
+              {facetKeys.map((key) => (
+                <option key={key} value={key}>
+                  {key}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="segment-field">
+            <label htmlFor={valueId}>Value</label>
+            <select
+              id={valueId}
+              aria-label="Segment value"
+              value={facet === null ? "all" : `value:${facet}`}
+              onChange={(event) => setFacet(event.target.value === "all" ? null : event.target.value.slice(6))}
+            >
+              <option value="all">All values</option>
+              {facets.map((value) => (
+                <option key={value} value={`value:${value}`}>
+                  {value === "" ? "(Empty value)" : value}
+                </option>
+              ))}
+            </select>
+          </div>
+          <p className="hint">Values and filters apply to this page only.</p>
+          <p className="hint" role="status">
+            {formatCount(items.length)} of {formatCount(page.examples.length)} examples match
+          </p>
+        </div>
       ) : null}
       <ol className="row-items" ref={listRef}>
         {items.length === 0 ? <li className="hint row-empty">No rows on this page match.</li> : null}
@@ -102,6 +118,10 @@ export function RowIndex({
           <li key={row}>
             <Link
               aria-current={row === selected ? "true" : undefined}
+              onClick={(event) => {
+                event.preventDefault();
+                go(row);
+              }}
               className="row-item"
               preventScrollReset
               replace
@@ -116,6 +136,14 @@ export function RowIndex({
           </li>
         ))}
       </ol>
+      <nav aria-label="Row pages" className="pager">
+        <PageLink disabled={!hasPrevious} label="Previous page" to={`?offset=${Math.max(0, page.offset - PAGE_SIZE)}`}>
+          <ChevronLeft aria-hidden="true" size={15} strokeWidth={1.75} />
+        </PageLink>
+        <PageLink disabled={!hasNext} label="Next page" to={`?offset=${page.offset + PAGE_SIZE}`}>
+          <ChevronRight aria-hidden="true" size={15} strokeWidth={1.75} />
+        </PageLink>
+      </nav>
     </section>
   );
 }

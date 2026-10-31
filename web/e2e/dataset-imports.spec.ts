@@ -23,15 +23,9 @@ async function openProcessor(page: Page, name: string, repo = "fixtures/cases") 
   await page.getByRole("button", { name: "Load sample" }).click();
   await expect(page.getByText(/3 sample rows/)).toBeVisible();
   await expect(page.getByText(/resolved to synthetic-/)).toBeVisible();
+  await page.getByRole("checkbox", { name: "language", exact: true }).check();
   await page.getByRole("button", { name: "Continue", exact: true }).click();
 
-  await page.getByRole("checkbox", { name: "language", exact: true }).check();
-  await page.getByPlaceholder("difficulty_bucket").fill("difficulty_bucket");
-  await page.getByRole("button", { name: "Add computed segment" }).click();
-  await expect(
-    page.getByText("Your processor must return exactly these segment keys, with a string value for each."),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Processor and preview" })).toBeVisible();
   await expect(page.locator(".cm-content")).toContainText('"language": str(row["language"])');
 }
@@ -118,18 +112,6 @@ test("surfaces processor errors, accepts correction, and invalidates a stale pre
   const continueButton = page.getByRole("button", { name: "Continue to review" });
   await expect(continueButton).toBeEnabled();
 
-  const footer = page.locator(".import-navigation");
-  await footer.getByRole("button", { name: "Back" }).click();
-  await page.getByRole("button", { name: "difficulty_bucket", exact: true }).click();
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
-  await expect(page.locator(".cm-content")).toContainText('"difficulty_bucket": str(row["difficulty"])');
-  await expect(page.locator(".preview-results")).toHaveCount(0);
-  await footer.getByRole("button", { name: "Back" }).click();
-  await page.getByPlaceholder("difficulty_bucket").fill("difficulty_bucket");
-  await page.getByRole("button", { name: "Add computed segment" }).click();
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
-  await expect(page.locator(".cm-content")).toContainText('"difficulty_bucket": str(row["difficulty"])');
-
   await editor.press("Control+End");
   await page.keyboard.press("Enter");
   await page.keyboard.type("# keyboard edit");
@@ -173,8 +155,11 @@ test("cancellation survives refresh, is rediscoverable, and retry requires a fre
   await expect(page.locator(".topbar .job-state")).toHaveAttribute("data-state", "running", {
     timeout: 10_000,
   });
-  page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Cancel import" }).click();
+  await page
+    .getByRole("dialog", { name: "Cancel this import?" })
+    .getByRole("button", { name: "Request cancellation" })
+    .click();
   await expect(page.locator('.topbar .job-state[data-state="cancelled"]')).toBeVisible({
     timeout: 10_000,
   });

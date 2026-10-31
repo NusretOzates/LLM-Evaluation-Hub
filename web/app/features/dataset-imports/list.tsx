@@ -1,7 +1,8 @@
 import { Clock3 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
-import { CatalogAlert } from "../../shell";
+import { StatusLabel } from "../../shared/controls";
+import { CatalogAlert } from "../../shared/feedback";
 import type { ImportJob } from "./contracts";
 import { listImports } from "./transport";
 import type { Route } from "./+types/list";
@@ -64,7 +65,21 @@ export default function ImportList({ loaderData }: Route.ComponentProps) {
           </div>
         ) : (
           <div className="table-wrap">
-            <table className="dataset-table">
+            <ul className="job-cards">
+              {jobs.map((job) => (
+                <li key={job.id}>
+                  <Link to={`/dataset-imports/${job.id}`}>{job.name}</Link>
+                  <p>
+                    <StatusLabel status={job.state} /> · {job.phase}
+                  </p>
+                  <p>
+                    {job.rows_loaded} loaded · {job.rows_kept} kept · {job.rows_dropped} skipped
+                  </p>
+                  <p>Updated {new Date(job.updated_at).toLocaleString()}</p>
+                </li>
+              ))}
+            </ul>
+            <table className="dataset-table job-table">
               <caption className="sr-only">Dataset import jobs</caption>
               <thead>
                 <tr>
@@ -93,12 +108,9 @@ function JobTableRow({ job }: { job: ImportJob }) {
         <Link className="row-link" to={`/dataset-imports/${job.id}`}>
           {job.name}
         </Link>
-        <span className="cell-sub mono">{job.id}</span>
       </th>
       <td>
-        <span className="job-state" data-state={job.state}>
-          {job.state}
-        </span>
+        <StatusLabel status={job.state} />
         <span className="cell-sub">{job.phase}</span>
       </td>
       <td className="mono">

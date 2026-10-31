@@ -39,9 +39,11 @@ def test_source_limit_is_enforced_before_loading(limit: int) -> None:
         SampleRequest(source=SourceSpec(repo_id="organization/dataset"), row_limit=limit)
 
 
-def test_new_tools_segment_is_rejected_without_changing_legacy_records() -> None:
-    with pytest.raises(ValidationError, match="tools"):
-        PreviewRequest(sample_id="sample", source_code="None", segment_keys=["tools"])
+def test_preview_rejects_client_segment_declarations() -> None:
+    with pytest.raises(ValidationError):
+        PreviewRequest.model_validate(
+            {"sample_id": "sample", "source_code": "None", "segment_keys": ["tools"]}
+        )
 
 
 def test_submission_name_is_normalized_and_unknown_inputs_rejected() -> None:

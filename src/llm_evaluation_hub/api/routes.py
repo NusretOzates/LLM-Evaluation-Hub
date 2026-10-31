@@ -3,6 +3,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request, Response
+from pydantic import BaseModel
 
 from llm_evaluation_hub.api.schemas import (
     DatasetView,
@@ -50,6 +51,50 @@ def create_tags(
     if not created:
         response.status_code = 200
     return branch_tree(forest)
+
+
+class TagDeletion(BaseModel):
+    """Requested tag deletion mode."""
+
+    path: str
+    promote_children: bool = False
+
+
+@router.get("/tag-impact")
+def tag_impact(path: str, catalog: Catalog) -> dict[str, list[str] | int]:
+    """Describe a tag subtree and its distinct affected dataset count."""
+    paths, count = catalog.tag_impact(path)
+    return {"paths": paths, "dataset_count": count}
+
+
+@router.post("/tag-deletion", status_code=204)
+def delete_tag(body: TagDeletion, catalog: Catalog) -> None:
+    """Remove tags or promote children without deleting datasets."""
+    catalog.delete_tag(body.path, promote_children=body.promote_children)
+
+
+@router.get("/trash")
+def list_trash(catalog: Catalog) -> list[DatasetView]:
+    """List datasets retained in trash."""
+    return [dataset_view(record) for record in catalog.list_trash()]
+
+
+@router.post("/trash/{dataset_id}", status_code=204)
+def trash_dataset(dataset_id: str, catalog: Catalog) -> None:
+    """Move a dataset into trash."""
+    catalog.trash(dataset_id)
+
+
+@router.post("/trash/{dataset_id}/restore", status_code=204)
+def restore_dataset(dataset_id: str, catalog: Catalog) -> None:
+    """Restore a retained dataset."""
+    catalog.restore(dataset_id)
+
+
+@router.delete("/trash/{dataset_id}", status_code=204)
+def purge_dataset(dataset_id: str, catalog: Catalog) -> None:
+    """Permanently remove a dataset in trash."""
+    catalog.purge(dataset_id)
 
 
 @router.get("/datasets")

@@ -56,29 +56,24 @@ export function RowViewer({
   return (
     <section aria-labelledby="row-title" className="viewer">
       <header className="viewer-bar">
-        <h2 id="row-title">
-          Row <span className="mono">{formatCount(selected)}</span>
+        <h2 id="row-title" tabIndex={-1}>
+          Example <span className="mono">{formatCount(selected)}</span>
           <span className="muted"> of {formatCount(page.total)}</span>
         </h2>
-        {segments.length === 0 ? null : (
-          <dl className="segments">
-            {segments.map(([key, value]) => (
-              <div key={key}>
-                <dt>{key}</dt>
-                <dd className="mono">{value}</dd>
-              </div>
-            ))}
-          </dl>
-        )}
         <div className="viewer-actions">
-          <button
-            aria-pressed={raw}
-            className="button-ghost button-small"
-            onClick={() => setRaw((value) => !value)}
-            type="button"
-          >
-            JSON
-          </button>
+          <fieldset className="view-mode" aria-label="Example display">
+            <button
+              type="button"
+              className="button-ghost button-small"
+              aria-pressed={!raw}
+              onClick={() => setRaw(false)}
+            >
+              Rendered
+            </button>
+            <button type="button" className="button-ghost button-small" aria-pressed={raw} onClick={() => setRaw(true)}>
+              JSON
+            </button>
+          </fieldset>
           <button
             className="button-ghost button-small"
             onClick={() => {
@@ -124,26 +119,37 @@ export function RowViewer({
           </span>
         </div>
       </header>
+      {segments.length === 0 ? null : (
+        <dl className="segments">
+          {segments.map(([key, value]) => (
+            <div key={key}>
+              <dt>{key}</dt>
+              <dd className="mono">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
       <div className="viewer-body" ref={bodyRef}>
         {raw ? (
           <pre className="raw mono">{JSON.stringify(example, null, 2)}</pre>
         ) : (
           <>
-            <article aria-label="Conversation" className="example">
+            <article aria-labelledby="conversation-heading" className="example">
+              <h3 id="conversation-heading">Conversation</h3>
               {example.conversation.map((message, turn) => (
                 <MessageView key={`${message.role}-${turn}`} message={message} />
               ))}
-              {example.expected_output === null || example.expected_output === undefined ? null : (
-                <div className="expected">
-                  <span className="block-label">Expected</span>
-                  {typeof example.expected_output === "string" ? (
-                    <p>{example.expected_output}</p>
-                  ) : (
-                    <pre className="mono">{formatValue(example.expected_output)}</pre>
-                  )}
-                </div>
-              )}
             </article>
+            {example.expected_output === null || example.expected_output === undefined ? null : (
+              <section className="expected" aria-labelledby="expected-heading">
+                <h3 id="expected-heading">Expected output</h3>
+                {typeof example.expected_output === "string" ? (
+                  <p>{example.expected_output}</p>
+                ) : (
+                  <pre className="mono">{formatValue(example.expected_output)}</pre>
+                )}
+              </section>
+            )}
             {extras.length === 0 ? null : (
               <section aria-labelledby="extras-heading" className="extras-card">
                 <h3 id="extras-heading">Extras</h3>
@@ -168,7 +174,7 @@ export function RowViewer({
 }
 
 function MessageView({ message }: { message: Message }) {
-  const text = messageText(message.content);
+  const text = typeof message.content === "string" ? message.content : messageText(message.content);
   const toolCalls =
     message.role === "assistant" && message.tool_calls && message.tool_calls.length > 0 ? message.tool_calls : null;
   const structured = message.role === "tool" && text !== null && isJsonText(text);
@@ -178,7 +184,7 @@ function MessageView({ message }: { message: Message }) {
       <details className="system-fold">
         <summary>
           <span className="turn-role mono">system</span>
-          <span className="system-preview">{text.replace(/\s+/g, " ")}</span>
+          <span className="system-preview">{text === "" ? "Empty message" : text.replace(/\s+/g, " ")}</span>
         </summary>
         <p>{text}</p>
       </details>

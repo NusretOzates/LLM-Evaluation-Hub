@@ -68,7 +68,7 @@ page = repo.examples("trendyol-cases-multilingual", offset=0, limit=1)
 assert page[0].conversation[0].role == "system"
 ```
 
-The leading message is a system message. When the processor starts with a user message, that system message has empty content. `GET /datasets/trendyol-cases-multilingual` on the API returns the same metadata, without `parquet_path`.
+The conversation preserves the messages returned by the processor. `GET /datasets/trendyol-cases-multilingual` on the API returns the same metadata, without `parquet_path`.
 
 ## Failures
 

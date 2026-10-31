@@ -240,15 +240,6 @@ Message = Annotated[
 _MESSAGE_ADAPTER = TypeAdapter(Message)
 
 
-def ensure_leading_system(messages: list[Message]) -> list[Message]:
-    """Prepend an empty system message when the conversation does not start with one."""
-    if not messages:
-        raise ValueError("conversation must not be empty")
-    if isinstance(messages[0], SystemMessage):
-        return messages
-    return [SystemMessage(content=""), *messages]
-
-
 def message_payload(message: Message) -> dict[str, object]:
     """Serialize one message, omitting empty tool-call lists and null optionals."""
     payload = message.model_dump(mode="json", exclude_none=True)
@@ -318,8 +309,7 @@ class ProcessedExample(BaseModel):
 
     @model_validator(mode="after")
     def normalize(self) -> Self:
-        """Start the conversation with a system message and check segment names."""
-        self.conversation = ensure_leading_system(self.conversation)
+        """Check segment names."""
         for key in self.segments:
             validate_segment_key(key)
         return self

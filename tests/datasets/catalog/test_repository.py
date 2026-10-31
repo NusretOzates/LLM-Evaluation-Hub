@@ -93,8 +93,7 @@ def test_register_stores_counts_segments_and_round_trips_examples(tmp_path: Path
         "language",
         "difficulty",
     ]
-    assert examples[0].conversation[0].content == ""
-    assert examples[0].conversation[1].content == "alpha"
+    assert examples[0].conversation[0].content == "alpha"
     assert examples[0].expected_output == "refund"
     assert examples[1].expected_output == {"label": "refund"}
     assert examples[2].expected_output is None
@@ -107,7 +106,7 @@ def test_examples_page_returns_the_requested_slice(tmp_path: Path) -> None:
     _register(repository)
 
     page = repository.examples("cases", offset=1, limit=1)
-    assert [example.conversation[1].content for example in page] == ["beta"]
+    assert [example.conversation[0].content for example in page] == ["beta"]
     assert repository.examples("cases", offset=10, limit=1) == []
     with pytest.raises(ValueError, match="offset"):
         repository.examples("cases", offset=-1)
@@ -183,7 +182,7 @@ def test_duplicate_name_keeps_the_first_snapshot(tmp_path: Path) -> None:
     with pytest.raises(DuplicateDatasetError):
         repository.register("cases", source, processor, processor_id="tests.other")
 
-    assert repository.examples("cases")[0].conversation[1].content == "alpha"
+    assert repository.examples("cases")[0].conversation[0].content == "alpha"
 
 
 def test_insert_failure_removes_the_parquet_snapshot(tmp_path: Path) -> None:
@@ -382,3 +381,64 @@ except DuplicateDatasetError:
     repo = DatasetRepository(root)
     assert len(repo.list_datasets()) == 1
     assert repo.inspect_storage() == {"missing": [], "unreferenced": []}
+
+
+def test_tag_deletion_and_promotion_are_atomic(tmp_path: Path) -> None:
+    from llm_evaluation_hub.core.datasets.catalog import DuplicateTagError
+
+    repository = DatasetRepository(tmp_path / "catalog")
+    _register(repository)
+    repository.create_tag("deep", parent="Trendyol Cases/classification")
+    repository.add_tags("cases", ["Trendyol Cases", "Trendyol Cases/classification/deep"])
+    paths, count = repository.tag_impact("Trendyol Cases")
+    assert len(paths) == 3 and count == 1
+    repository.create_tag("classification")
+    with pytest.raises(DuplicateTagError):
+        repository.delete_tag("Trendyol Cases", promote_children=True)
+    assert repository.get("cases").tags == paths
+    repository.delete_tag("classification")
+    repository.delete_tag("Trendyol Cases", promote_children=True)
+    assert repository.get("cases").tags == ["classification", "classification/deep"]
+    repository.delete_tag("classification")
+    assert repository.get("cases").tags == []
+    assert repository.rows("cases").height == 3
+
+
+def test_trash_restore_and_retryable_purge(tmp_path: Path) -> None:
+    repository = DatasetRepository(tmp_path / "catalog")
+    _register(repository)
+    record = repository.get("cases")
+    snapshot = tmp_path / "catalog" / record.parquet_path
+    repository.trash(record.id)
+    assert repository.list_datasets() == []
+    assert repository.list_datasets(tag="Trendyol Cases") == []
+    assert repository.list_trash()[0].id == record.id
+    assert snapshot.exists()
+    with pytest.raises(DuplicateDatasetError):
+        repository.register("cases", _source(), _processor, processor_id="tests.cases")
+    repository.restore(record.id)
+    assert repository.get("cases").id == record.id
+    repository.trash(record.id)
+    repository.purge(record.id)
+    repository.purge(record.id)
+    assert not snapshot.exists()
+    assert repository.list_trash() == []
+    assert len(repository.list_tags()) == 2
+
+
+def test_purge_rejects_non_owned_snapshot(tmp_path: Path) -> None:
+    root = tmp_path / "catalog"
+    repository = DatasetRepository(root)
+    _register(repository)
+    record = repository.get("cases")
+    external = tmp_path / "external.parquet"
+    external.write_bytes(b"untouched")
+    repository.trash(record.id)
+    with sqlite3.connect(root / "catalog.sqlite") as connection:
+        connection.execute(
+            "UPDATE datasets SET parquet_path = ? WHERE id = ?", (str(external), record.id)
+        )
+    with pytest.raises(ValueError, match="owned path"):
+        repository.purge(record.id)
+    assert external.read_bytes() == b"untouched"
+    assert repository.list_trash()[0].id == record.id

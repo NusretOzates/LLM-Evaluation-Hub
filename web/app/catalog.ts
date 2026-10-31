@@ -91,3 +91,39 @@ async function request<T>(path: string, init: RequestInit, parse: (value: unknow
   }
   return parse(body);
 }
+
+export function listTrash(signal?: AbortSignal): Promise<Dataset[]> {
+  return request("/trash", { method: "GET", signal }, parseDatasets);
+}
+export function trashDataset(id: string): Promise<void> {
+  return request(`/trash/${encodeURIComponent(id)}`, { method: "POST" }, () => undefined);
+}
+export function restoreDataset(id: string): Promise<void> {
+  return request(`/trash/${encodeURIComponent(id)}/restore`, { method: "POST" }, () => undefined);
+}
+export function purgeDataset(id: string): Promise<void> {
+  return request(`/trash/${encodeURIComponent(id)}`, { method: "DELETE" }, () => undefined);
+}
+export function deleteTag(path: string, promoteChildren: boolean): Promise<void> {
+  return request(
+    "/tag-deletion",
+    { method: "POST", body: JSON.stringify({ path, promote_children: promoteChildren }) },
+    () => undefined,
+  );
+}
+
+export function tagImpact(path: string): Promise<{ paths: string[]; datasetCount: number }> {
+  return request(`/tag-impact?path=${encodeURIComponent(path)}`, { method: "GET" }, (value) => {
+    if (
+      typeof value !== "object" ||
+      value === null ||
+      !("paths" in value) ||
+      !("dataset_count" in value) ||
+      !Array.isArray(value.paths) ||
+      !value.paths.every((path: unknown) => typeof path === "string") ||
+      typeof value.dataset_count !== "number"
+    )
+      throw new CatalogError("Invalid tag impact response.", 500);
+    return { paths: value.paths, datasetCount: value.dataset_count };
+  });
+}

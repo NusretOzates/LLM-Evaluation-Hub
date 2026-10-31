@@ -16,13 +16,12 @@ from llm_evaluation_hub.core.datasets.records import (
 )
 
 
-def test_single_user_turn_gains_an_empty_system_message() -> None:
+def test_single_user_turn_is_preserved() -> None:
     example = ProcessedExample(conversation=[{"role": "user", "content": "Where is my order?"}])
 
-    assert example.conversation[0].role == "system"
-    assert example.conversation[0].content == ""
-    assert example.conversation[1].role == "user"
-    assert example.conversation[1].content == "Where is my order?"
+    assert len(example.conversation) == 1
+    assert example.conversation[0].role == "user"
+    assert example.conversation[0].content == "Where is my order?"
 
 
 def test_existing_system_prompt_is_preserved() -> None:
@@ -52,7 +51,7 @@ def test_user_message_accepts_image_video_and_audio_parts() -> None:
         ]
     )
 
-    user = example.conversation[1]
+    user = example.conversation[0]
     assert isinstance(user, UserMessage)
     assert isinstance(user.content, list)
     assert [part.type for part in user.content] == ["image", "video", "audio", "text"]
@@ -86,14 +85,14 @@ def test_tool_call_thinking_and_tool_result_round_trip() -> None:
         ]
     )
 
-    assistant = example.conversation[2]
+    assistant = example.conversation[1]
     assert isinstance(assistant, AssistantMessage)
     assert assistant.thinking == "I should call the weather tool."
     assert assistant.tool_calls[0].function.arguments == {"city": "Istanbul"}
     payload = json.loads(encode_conversation(example.conversation))
-    assert payload[2]["tool_calls"][0]["function"]["arguments"] == {"city": "Istanbul"}
-    assert payload[3]["role"] == "tool"
-    assert payload[3]["tool_call_id"] == "call-1"
+    assert payload[1]["tool_calls"][0]["function"]["arguments"] == {"city": "Istanbul"}
+    assert payload[2]["role"] == "tool"
+    assert payload[2]["tool_call_id"] == "call-1"
 
 
 def test_assistant_message_requires_content_tool_calls_or_thinking() -> None:

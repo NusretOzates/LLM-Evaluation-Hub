@@ -3,7 +3,7 @@
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 import pytest
 from pydantic import ValidationError
@@ -42,7 +42,9 @@ class LocalOperations:
         if kind == "sample":
             request = SampleRequest.model_validate(payload)
             return collect_sample(SyntheticSource(), request.source, request.row_limit)
-        raise AssertionError("Unexpected preview operation")
+        return execute_preview(
+            cast(list[dict[str, object]], payload["rows"]), cast(str, payload["source_code"])
+        )
 
 
 def test_sample_preserves_nested_json_and_order() -> None:
@@ -123,21 +125,42 @@ def test_source_rejects_non_json_values(value: object) -> None:
         collect_sample(InvalidSource(), SourceSpec(repo_id="org/data"), 1)
 
 
-def test_preview_uses_real_monty_and_accepts_all_skipped() -> None:
-    result = execute_preview([{"text": "x"}], "def process(row):\n    return None", [])
-    assert result["valid"] and result["rows_dropped"] == 1
+def test_preview_requires_a_retained_row() -> None:
+    result = execute_preview([{"text": "x"}], "def process(row):\n    return None")
+    assert not result["valid"] and result["rows_dropped"] == 1
     assert result["rows"] == [
         {"source_index": 0, "status": "skipped", "example": None, "error": None}
     ]
 
 
 def test_preview_reports_safe_row_and_segment_failures() -> None:
-    result = execute_preview([{"text": "good"}, {"text": 12345}], CODE, [])
+    result = execute_preview([{"text": "good"}, {"text": 12345}], CODE)
     assert not result["valid"] and result["rows_kept"] == 1
     assert "12345" not in str(result)
-    result = execute_preview([{"text": "ok"}], CODE, ["language"])
+    code = (
+        'def process(row):\n    return {"conversation": [{"role": "user", "content": "ok"}], '
+        '"segments": {row["key"]: "value"}}'
+    )
+    result = execute_preview([{"key": "language"}, {"key": "domain"}], code)
     assert not result["valid"]
+    assert result["segment_keys"] == ["language"]
     assert "segments" in str(result)
+
+
+def test_preview_attestation_persists_inferred_segments(tmp_path: Path) -> None:
+    store = ImportStore(tmp_path)
+    service = PreviewService(store, LocalOperations())
+    sample = service.sample(SampleRequest(source=SourceSpec(repo_id="org/data"), row_limit=2))
+    code = (
+        'def process(row):\n    return {"conversation": '
+        '[{"role": "user", "content": row["text"]}], '
+        '"segments": {"language": "en"}}'
+    )
+    preview = service.preview(PreviewRequest(sample_id=sample.id, source_code=code))
+    assert preview.valid and preview.id
+    attestation = store.get_preview(preview.id)
+    assert attestation is not None
+    assert cast(dict[str, object], attestation["spec"])["segment_keys"] == ["language"]
 
 
 def test_sample_cache_distinguishes_expiry_and_evicts_oldest(tmp_path: Path) -> None:
@@ -169,7 +192,7 @@ def test_service_real_worker_attests_only_valid_previews_without_publication(
     spec = attestation["spec"]
     assert isinstance(spec, dict) and "rows" not in spec
     failed = service.preview(
-        PreviewRequest(sample_id=sample.id, source_code=CODE, segment_keys=["x"])
+        PreviewRequest(sample_id=sample.id, source_code="def process(row):\n    return None")
     )
     assert not failed.valid and failed.id is None
     assert DatasetRepository(tmp_path).list_datasets() == []

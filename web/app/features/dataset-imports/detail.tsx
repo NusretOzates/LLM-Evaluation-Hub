@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router";
-import { CatalogAlert } from "../../shell";
+import { Link, useNavigate, useRouteLoaderData } from "react-router";
+import { Dialog } from "../../shared/dialog";
+import { StatusLabel, Button } from "../../shared/controls";
+import { CatalogAlert } from "../../shared/feedback";
+import type { clientLoader as rootLoader } from "../../root";
 import type { ImportJob } from "./contracts";
 import { cancelImport, getImport } from "./transport";
 import type { Route } from "./+types/detail";
@@ -16,12 +19,8 @@ export default function ImportDetail({ loaderData }: Route.ComponentProps) {
   const [job, setJob] = useState(loaderData.job);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
   const navigate = useNavigate();
-  useEffect(() => {
-    if (job.state === "succeeded" && job.dataset_id !== null) {
-      navigate(`/datasets/${encodeURIComponent(job.dataset_id)}`);
-    }
-  }, [job.dataset_id, job.state, navigate]);
   useEffect(() => {
     let active = true;
     let timer: ReturnType<typeof setTimeout>;
@@ -46,11 +45,11 @@ export default function ImportDetail({ loaderData }: Route.ComponentProps) {
     };
   }, [job.id, job.state]);
   async function cancel() {
-    if (!window.confirm("Request cancellation for this import? The job will not publish a partial dataset.")) return;
     setBusy(true);
     setError(null);
     try {
       setJob(await cancelImport(job.id));
+      setConfirmCancel(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Cancellation could not be confirmed.");
     } finally {
@@ -58,7 +57,9 @@ export default function ImportDetail({ loaderData }: Route.ComponentProps) {
     }
   }
   const retryable = ["failed", "cancelled", "interrupted"].includes(job.state);
-  const datasetId = job.dataset_id;
+  const catalog = useRouteLoaderData<typeof rootLoader>("root");
+  const datasetId =
+    job.dataset_id && catalog?.datasets.some((dataset) => dataset.id === job.dataset_id) ? job.dataset_id : null;
   return (
     <div className="page">
       <header className="topbar import-topbar">
@@ -68,7 +69,7 @@ export default function ImportDetail({ loaderData }: Route.ComponentProps) {
           <h1>{job.name}</h1>
         </nav>
         <span className="job-state" data-state={job.state}>
-          {job.state}
+          <StatusLabel status={job.state} />
         </span>
       </header>
       <div className="page-body import-job-detail">
@@ -79,21 +80,16 @@ export default function ImportDetail({ loaderData }: Route.ComponentProps) {
         ) : null}
         <section className="import-card">
           <header>
-            <p className="eyebrow mono">{job.id}</p>
             <h2>Import {job.name}</h2>
             <p>{job.phase}</p>
           </header>
           <dl className="job-progress">
             <dt>State</dt>
             <dd>
-              <span className="job-state" data-state={job.state}>
-                {job.state}
-              </span>
+              <StatusLabel status={job.state} />
             </dd>
             <dt>Rows loaded</dt>
-            <dd>
-              {job.rows_loaded} / {job.spec.row_limit}
-            </dd>
+            <dd>{job.rows_loaded}</dd>
             <dt>Rows kept</dt>
             <dd>{job.rows_kept}</dd>
             <dt>Rows skipped</dt>
@@ -123,7 +119,7 @@ export default function ImportDetail({ loaderData }: Route.ComponentProps) {
               <button
                 className="button-ghost"
                 disabled={busy || job.state === "cancelling"}
-                onClick={() => void cancel()}
+                onClick={() => setConfirmCancel(true)}
                 type="button"
               >
                 {job.state === "cancelling" ? "Cancellation requested" : "Cancel import"}
@@ -133,6 +129,9 @@ export default function ImportDetail({ loaderData }: Route.ComponentProps) {
               <Link className="button-ghost" to={`/dataset-imports/new?retry=${encodeURIComponent(job.id)}`}>
                 Retry with this specification
               </Link>
+            ) : null}
+            {job.state === "succeeded" && !datasetId ? (
+              <p>This dataset is in Trash or has been permanently deleted.</p>
             ) : null}
             {job.state === "succeeded" && datasetId ? (
               <button
@@ -148,8 +147,8 @@ export default function ImportDetail({ loaderData }: Route.ComponentProps) {
             </Link>
           </div>
         </section>
-        <section className="import-card">
-          <h2>Import specification</h2>
+        <details className="import-card">
+          <summary>Import specification</summary>
           <dl className="job-progress">
             <dt>Repository</dt>
             <dd>{job.spec.source.repo_id}</dd>
@@ -172,8 +171,23 @@ export default function ImportDetail({ loaderData }: Route.ComponentProps) {
             <summary>Processor source</summary>
             <pre className="raw mono">{job.spec.source_code}</pre>
           </details>
-        </section>
+        </details>
       </div>
+      <Dialog
+        open={confirmCancel}
+        title="Cancel this import?"
+        description="The job will not publish a partial dataset."
+        pending={busy}
+        onClose={() => setConfirmCancel(false)}
+      >
+        {error && <p role="alert">{error}</p>}
+        <Button autoFocus type="button" disabled={busy} onClick={() => setConfirmCancel(false)}>
+          Keep import
+        </Button>
+        <Button type="button" loading={busy} onClick={() => void cancel()}>
+          Request cancellation
+        </Button>
+      </Dialog>
     </div>
   );
 }

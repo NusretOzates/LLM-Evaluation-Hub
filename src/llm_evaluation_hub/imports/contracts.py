@@ -5,7 +5,6 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from llm_evaluation_hub.core.datasets.processing import validate_segment_declaration
 from llm_evaluation_hub.core.datasets.records import JsonValue, ProcessedExample
 
 PROCESSOR_CONTRACT_VERSION = "2"
@@ -99,16 +98,6 @@ class PreviewRequest(ImportModel):
 
     sample_id: str
     source_code: str = Field(min_length=1, max_length=65_536)
-    segment_keys: list[str] = Field(default_factory=list)
-
-    @field_validator("segment_keys")
-    @classmethod
-    def declared_segments(cls, value: list[str]) -> list[str]:
-        """Validate new-format declarations without changing legacy row decoding."""
-        keys = validate_segment_declaration(value)
-        if "tools" in keys:
-            raise ValueError("tools is reserved for available tool definitions.")
-        return keys
 
 
 class PreviewRow(ImportModel):

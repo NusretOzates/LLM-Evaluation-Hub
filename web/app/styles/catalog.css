@@ -49,8 +49,9 @@
 
 .dataset-table tbody th,
 .dataset-table tbody td {
-  height: 58px;
-  padding: 0 14px;
+  min-height: 52px;
+  height: 52px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--gray-2);
   text-align: left;
   font-weight: 400;
@@ -75,21 +76,6 @@
   color: var(--text);
 }
 
-.row-link::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-}
-
-.row-link:focus-visible {
-  outline: none;
-}
-
-.row-link:focus-visible::after {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
-
 .cell-main {
   display: block;
   color: var(--gray-9);
@@ -100,13 +86,6 @@
   margin-top: 1px;
   color: var(--text-3);
   font-size: 12px;
-}
-
-.tags-cell {
-  max-width: 260px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .retention {
@@ -134,4 +113,108 @@
 .retention .mono {
   min-width: 4ch;
   text-align: right;
+}
+
+.catalog-toolbar,
+.catalog-chips {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 24px;
+}
+.catalog-toolbar > .control-field {
+  flex: 1 1 260px;
+  max-width: 480px;
+}
+.catalog-toolbar input {
+  min-height: 44px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  padding: 0 12px;
+  background: var(--gray-0);
+}
+.catalog-filter-panel {
+  position: fixed;
+  inset: auto;
+  z-index: 5;
+  margin: 0;
+  width: min(360px, calc(100vw - 32px));
+  max-height: min(480px, calc(100vh - 32px));
+  overflow: auto;
+  padding: 16px;
+  background: var(--gray-0);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+}
+.catalog-result-count {
+  padding: 0 24px 8px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+.token-clear {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.row-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.dataset-cards {
+  display: none;
+}
+@container (max-width: 999px) {
+  .catalog-table {
+    display: none;
+  }
+  .dataset-cards {
+    display: grid;
+    gap: 12px;
+    padding: 16px;
+  }
+  .dataset-card {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 16px;
+    overflow-wrap: anywhere;
+  }
+  .dataset-card-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+}
+.trash-list {
+  overflow: auto;
+}
+.trash-list > p {
+  margin-bottom: 24px;
+}
+.trash-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  border-bottom: 1px solid var(--line);
+}
+.filter-sheet {
+  width: calc(100vw - 32px);
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+}
+
+.catalog-chips .filter-token {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.catalog-chips .filter-token details {
+  min-width: 0;
+}
+
+.catalog-filter-panel[data-positioned="false"] {
+  visibility: hidden;
 }

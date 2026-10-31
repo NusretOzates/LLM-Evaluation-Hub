@@ -3,7 +3,7 @@ import { defineConfig } from "vite";
 
 const catalogProxy = {
   "/api": {
-    target: "http://127.0.0.1:8000",
+    target: process.env.WORKBENCH_TEST_API ?? "http://127.0.0.1:8000",
     rewrite: (path: string) => path.replace(/^\/api/, ""),
   },
 };

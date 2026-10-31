@@ -93,10 +93,81 @@ class DatasetRepository:
         with catalog_connection(self._root) as connection:
             return TagStore(connection).create(name, parent)
 
-    def delete_tag(self, path: str) -> None:
-        """Delete a tag that has no children and no dataset links."""
+    def delete_tag(self, path: str, *, promote_children: bool = False) -> None:
+        """Delete a subtree or delete its grouping and promote its children."""
         with catalog_connection(self._root) as connection:
-            TagStore(connection).delete(path)
+            connection.execute("BEGIN IMMEDIATE")
+            TagStore(connection).delete(path, promote_children=promote_children)
+
+    def tag_impact(self, path: str) -> tuple[list[str], int]:
+        """Return the full affected subtree and distinct linked dataset count."""
+        with catalog_connection(self._root) as connection:
+            return TagStore(connection).impact(path)
+
+    def trash(self, dataset_id: str) -> None:
+        """Move a dataset to trash, leaving its snapshot and shared tags intact."""
+        with catalog_connection(self._root) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT id FROM datasets WHERE id = ?", (dataset_id,)
+            ).fetchone()
+            if row is None:
+                raise UnknownDatasetError(dataset_id)
+            connection.execute(
+                "UPDATE datasets SET trashed_at = COALESCE(trashed_at, ?) WHERE id = ?",
+                (datetime.now(UTC).isoformat(), dataset_id),
+            )
+
+    def restore(self, dataset_id: str) -> None:
+        """Restore a trashed dataset; names remain reserved while in trash."""
+        with catalog_connection(self._root) as connection:
+            cursor = connection.execute(
+                "UPDATE datasets SET trashed_at = NULL WHERE id = ? AND purge_pending = 0",
+                (dataset_id,),
+            )
+            if cursor.rowcount == 0:
+                raise UnknownDatasetError(dataset_id)
+
+    def list_trash(self) -> list[DatasetRecord]:
+        """List datasets retained in trash."""
+        with catalog_connection(self._root) as connection:
+            rows = connection.execute(
+                "SELECT * FROM datasets WHERE trashed_at IS NOT NULL ORDER BY name"
+            ).fetchall()
+            return [self._record(connection, row) for row in rows]
+
+    def purge(self, dataset_id: str) -> None:
+        """Permanently remove a trashed snapshot, with a retryable cleanup marker."""
+        with catalog_connection(self._root) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT * FROM datasets WHERE id = ?", (dataset_id,)
+            ).fetchone()
+            if row is None:
+                return
+            if row["trashed_at"] is None:
+                raise ValueError("dataset must be in trash before permanent deletion")
+            canonical = f"datasets/{dataset_id}/rows.parquet"
+            if row["parquet_path"] != canonical or str(uuid.UUID(dataset_id)) != dataset_id:
+                raise ValueError("snapshot is not at its owned path")
+            root = self._root.resolve()
+            snapshot = self._root / canonical
+            if snapshot.resolve().parent != root / "datasets" / dataset_id:
+                raise ValueError("snapshot path escapes its owned directory")
+            connection.execute("UPDATE datasets SET purge_pending = 1 WHERE id = ?", (dataset_id,))
+        snapshot.unlink(missing_ok=True)
+        with catalog_connection(self._root) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            connection.execute(
+                "UPDATE import_jobs SET dataset_id = NULL WHERE dataset_id = ?", (dataset_id,)
+            )
+            connection.execute(
+                "DELETE FROM processor_provenance WHERE dataset_id = ?", (dataset_id,)
+            )
+            connection.execute("DELETE FROM dataset_tags WHERE dataset_id = ?", (dataset_id,))
+            connection.execute(
+                "DELETE FROM datasets WHERE id = ? AND purge_pending = 1", (dataset_id,)
+            )
 
     def list_tags(self) -> list[Tag]:
         """Return every tag node, ordered by path."""
@@ -248,7 +319,7 @@ class DatasetRepository:
         Quiesce registration for a stable report: a file may be published just
         before its metadata transaction commits.
         """
-        expected = {record.parquet_path for record in self.list_datasets()}
+        expected = {record.parquet_path for record in [*self.list_datasets(), *self.list_trash()]}
         actual = {str(path.relative_to(self._root)) for path in self._root.rglob("*.parquet")}
         return {"missing": sorted(expected - actual), "unreferenced": sorted(actual - expected)}
 
@@ -256,7 +327,9 @@ class DatasetRepository:
         """List datasets. A tag path also matches datasets tagged below that node."""
         with catalog_connection(self._root) as connection:
             if tag is None:
-                rows = connection.execute("SELECT * FROM datasets ORDER BY name").fetchall()
+                rows = connection.execute(
+                    "SELECT * FROM datasets WHERE trashed_at IS NULL ORDER BY name"
+                ).fetchall()
             else:
                 tag_ids = TagStore(connection).descendant_ids(tag)
                 placeholders = ", ".join("?" for _ in tag_ids)
@@ -265,7 +338,7 @@ class DatasetRepository:
                     SELECT DISTINCT datasets.*
                     FROM datasets
                     JOIN dataset_tags ON dataset_tags.dataset_id = datasets.id
-                    WHERE dataset_tags.tag_id IN ({placeholders})
+                    WHERE datasets.trashed_at IS NULL AND dataset_tags.tag_id IN ({placeholders})
                     ORDER BY datasets.name
                     """,
                     tag_ids,
@@ -426,7 +499,9 @@ class DatasetRepository:
 
     def _dataset_row(self, connection: sqlite3.Connection, name: str) -> sqlite3.Row:
         """Return the dataset row or raise when the name is missing."""
-        row = connection.execute("SELECT * FROM datasets WHERE name = ?", (name,)).fetchone()
+        row = connection.execute(
+            "SELECT * FROM datasets WHERE name = ? AND trashed_at IS NULL", (name,)
+        ).fetchone()
         if row is None:
             raise UnknownDatasetError(name)
         return row

@@ -55,14 +55,14 @@
   padding: 10px 12px;
   border: 1px solid oklch(52% 0.17 25 / 0.3);
   border-radius: var(--radius);
-  background: oklch(52% 0.17 25 / 0.06);
+  background: var(--danger-surface);
   color: var(--danger);
 }
 
 .button-ghost {
   display: inline-flex;
   align-items: center;
-  height: 30px;
+  min-height: 44px;
   padding: 0 12px;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
@@ -70,17 +70,11 @@
   color: var(--gray-9);
   font-weight: 500;
   cursor: pointer;
-  transition:
-    background-color 120ms var(--ease),
-    transform 120ms var(--ease);
+  transition: background-color 120ms var(--ease);
 }
 
 .button-ghost:hover {
   background: var(--gray-1);
-}
-
-.button-ghost:active {
-  transform: scale(0.98);
 }
 
 .button-ghost:disabled {

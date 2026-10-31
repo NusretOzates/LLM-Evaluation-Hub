@@ -2,7 +2,7 @@ import { Link, useRouteLoaderData, type ShouldRevalidateFunctionArgs } from "rea
 
 import { addTags, CatalogError, getDataset, listDatasets, listExamples, removeTags } from "../catalog";
 
-import { CatalogAlert } from "../shell";
+import { CatalogAlert } from "../shared/feedback";
 
 import { DatasetInspector } from "../features/dataset-inspector/inspector";
 

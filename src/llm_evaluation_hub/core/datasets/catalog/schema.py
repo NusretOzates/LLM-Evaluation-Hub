@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS import_jobs (
 def migrate(connection: sqlite3.Connection) -> None:
     """Upgrade metadata without rewriting existing immutable snapshots."""
     version = connection.execute("PRAGMA user_version").fetchone()[0]
-    if version not in (0, 1, 2):
+    if version not in (0, 1, 2, 3):
         raise RuntimeError(f"unsupported catalog schema version: {version}")
     connection.execute("PRAGMA journal_mode = WAL").fetchone()
     connection.executescript(_SCHEMA)
@@ -79,8 +79,14 @@ def migrate(connection: sqlite3.Connection) -> None:
         connection.execute(
             "ALTER TABLE datasets ADD COLUMN snapshot_format_version INTEGER NOT NULL DEFAULT 1"
         )
+    if "trashed_at" not in columns:
+        connection.execute("ALTER TABLE datasets ADD COLUMN trashed_at TEXT")
+    if "purge_pending" not in columns:
+        connection.execute(
+            "ALTER TABLE datasets ADD COLUMN purge_pending INTEGER NOT NULL DEFAULT 0"
+        )
     connection.executescript(_IMPORT_SCHEMA)
-    connection.execute("PRAGMA user_version = 2")
+    connection.execute("PRAGMA user_version = 3")
 
 
 def initialize_catalog(root: Path) -> None:

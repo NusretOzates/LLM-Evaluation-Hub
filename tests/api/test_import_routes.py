@@ -66,7 +66,7 @@ def attested(client: TestClient) -> str:
     assert sampled.status_code == 200, sampled.text
     response = client.post(
         "/dataset-previews",
-        json={"sample_id": sampled.json()["id"], "source_code": CODE, "segment_keys": ["language"]},
+        json={"sample_id": sampled.json()["id"], "source_code": CODE},
     )
     assert response.status_code == 200, response.text
     assert response.json()["valid"]
@@ -127,7 +127,7 @@ def test_unknown_and_expired_ids_have_distinct_statuses(
     supervisor = application.state.import_supervisor
     assert isinstance(service, PreviewService) and isinstance(supervisor, ImportSupervisor)
     if endpoint == "/dataset-previews":
-        body = {"sample_id": "missing", "source_code": CODE, "segment_keys": ["language"]}
+        body = {"sample_id": "missing", "source_code": CODE}
         assert import_client.post(endpoint, json=body).status_code == 404
         sample = service.sample(SampleRequest(source=SourceSpec(repo_id="org/data")))
         sample.expires_at = datetime.now(UTC) - timedelta(seconds=1)

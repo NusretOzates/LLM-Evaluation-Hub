@@ -24,7 +24,7 @@ Start here when a behavior change needs a file. Each row is one capability. Path
 | Starter catalog | `llm_evaluation_hub.api.seed:ensure_starter_catalog` | `src/llm_evaluation_hub/api/seed.py:ensure_starter_catalog`, `src/llm_evaluation_hub/api/asgi.py:app` | `tests/api/test_seed.py` |
 | Docker stack | `compose.yaml` | `Dockerfile`, `web/Dockerfile`, `web/docker-entrypoint.sh`, `web/nginx.conf.template`, `docker/seed/` | Manual Compose empty/seed/restart smoke; see [Docker recipe](../how-to/run-with-docker.md) |
 | Dataset import workbench | routes `/dataset-imports/new`, `/dataset-imports`, `/dataset-imports/:id` | `web/app/features/dataset-imports/`, `web/app/api-schema.ts` | `web/tests/`, `web/e2e/` |
-| Workbench shell and tags | route `/datasets` | `web/app/shell.tsx:Shell`, `web/app/routes/datasets.tsx`, `web/app/catalog.ts` | `web/e2e/catalog.spec.ts` |
+| Workbench shell, catalog, and tags | routes `/datasets`, `/tags` | `web/app/shell.tsx:Shell`, `web/app/routes/datasets.tsx`, `web/app/routes/tags.tsx`, `web/app/shared/tag-picker.tsx`, `web/app/shared/catalog-view.ts` | `web/e2e/catalog-filter.spec.ts`, `web/e2e/tags-management.spec.ts`, `web/tests/catalog-view.test.ts` |
 | Row inspector | route `/datasets/:name` | `web/app/routes/dataset.tsx:DatasetPage`, `web/app/features/dataset-inspector/` | `web/e2e/catalog.spec.ts` |
 | Workbench visual design | `web/app/app.css` | `web/app/styles/`, `web/app/root.tsx` font imports | `web/e2e/catalog.spec.ts` |
 
@@ -38,3 +38,5 @@ The workbench has unit tests in `web/tests/` and real API/browser tests in `web/
 | Transport types | `scripts/export_contract.py` | `web/app/api-schema.ts`, `catalog-types.ts`, `catalog-parsers.ts` | `web/tests/catalog.test.ts`, contract CI check |
 | Backup/restore | `scripts/catalog_backup.py` | `DatasetRepository.inspect_storage` | `tests/datasets/catalog/test_repository.py` |
 | Documentation checks | `scripts/check_docs.py` | `docs/` concepts and links | quality workflow |
+
+Trash lifecycle and tag deletion are owned by `core/datasets/catalog/repository.py` and `tags.py`, with catalog routes in `api/routes.py`. The workbench Trash route is `web/app/routes/trash.tsx`; shared dataset action controls live in `web/app/shared/dataset-menu.tsx`.

@@ -11,7 +11,10 @@ class DuplicateDatasetError(CatalogError):
     def __init__(self, name: str) -> None:
         """Name the dataset that already exists."""
         self.name = name
-        super().__init__(f"dataset already exists: {name}")
+        super().__init__(
+            f"dataset already exists: {name}. If it is in Trash, "
+            "restore or permanently delete it first."
+        )
 
 
 class UnknownDatasetError(CatalogError):

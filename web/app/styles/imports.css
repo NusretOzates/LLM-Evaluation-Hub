@@ -8,12 +8,12 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
-  width: min(100% - 40px, 1040px);
+  width: min(100% - 48px, 880px);
   margin: 24px auto 56px;
 }
 .import-steps {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 8px;
   padding: 0;
   margin: 0 0 18px;
@@ -34,6 +34,10 @@
   color: var(--text-2);
   text-align: left;
   cursor: pointer;
+}
+.import-steps button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 .import-steps [aria-current="step"] {
   border-bottom: 2px solid var(--accent);
@@ -75,7 +79,7 @@
 }
 .import-card > header .import-card > header .eyebrow {
   color: var(--text-3);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -85,24 +89,24 @@
   gap: 6px;
   min-width: 0;
   color: var(--text-2);
-  font-size: 12px;
+  font-size: 14px;
 }
 .import-field input,
 .import-field select {
-  min-height: 34px;
+  min-height: 44px;
   width: 100%;
   padding: 6px 9px;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
-  background: white;
+  background: var(--gray-0);
   color: var(--text);
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
 }
 .import-field input:focus,
 .import-field select:focus {
   outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
 .import-field .hint {
   margin: 0;
@@ -179,15 +183,15 @@
   align-items: center;
   gap: 6px;
   max-width: 100%;
-  min-height: 26px;
+  min-height: 44px;
   padding: 3px 7px;
   border: 1px solid var(--line);
   border-radius: 4px;
-  background: white;
+  background: var(--gray-0);
   color: var(--text-2);
   cursor: pointer;
   font: inherit;
-  font-size: 11px;
+  font-size: 12px;
 }
 .hint {
   color: var(--text-3);
@@ -268,6 +272,10 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
+.segment-picker > .hint {
+  grid-column: 1 / -1;
+  margin: 0;
+}
 .segment-picker label {
   align-items: flex-start;
   border: 1px solid var(--line);
@@ -284,18 +292,23 @@
   background: var(--gray-1);
 }
 .computed-key {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
   gap: 8px;
   max-width: 520px;
 }
-.computed-key .import-field {
-  flex: 1;
+.computed-key > .hint {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  margin: 0;
+}
+.computed-key > button {
+  grid-column: 2;
+  grid-row: 1;
 }
 .processor-contract {
-  display: flex;
-  justify-content: space-between;
-  gap: 18px;
+  display: block;
   margin: -7px 0 14px;
   padding: 10px 12px;
   border-radius: var(--radius);
@@ -304,7 +317,10 @@
   font-size: 12px;
 }
 .processor-contract p {
-  margin: 0;
+  margin: 8px 0 0;
+}
+.processor-contract summary {
+  cursor: pointer;
 }
 .processor-contract strong {
   flex: 0 0 auto;
@@ -332,15 +348,31 @@
   border-radius: var(--radius);
 }
 .processor-toolbar {
-  flex-wrap: wrap;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: 8px;
   padding: 7px 9px;
   border-bottom: 1px solid var(--line);
   color: var(--text-2);
   font-size: 12px;
+}
+.processor-templates summary {
+  cursor: pointer;
+  color: var(--text-2);
+}
+.processor-templates > .hint {
+  margin: 8px 0;
+}
+.processor-template-options {
+  display: grid;
+  gap: 8px;
+}
+.processor-template-options > div {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 .processor-editor {
   width: 100%;
@@ -359,7 +391,7 @@
   outline: none;
 }
 .cm-processor-error-line {
-  background: oklch(97% 0.06 25);
+  background: var(--danger-surface);
   border-left: 2px solid var(--danger);
 }
 .source-tools {
@@ -422,7 +454,7 @@
   padding: 8px;
   border: 1px solid var(--line);
   border-radius: 4px;
-  background: white;
+  background: var(--gray-0);
   color: var(--text-2);
   text-align: left;
   cursor: pointer;
@@ -438,7 +470,7 @@
   color: var(--accent-hover);
 }
 .preview-row span {
-  font-size: 11px;
+  font-size: 12px;
 }
 .preview-example {
   margin-top: 12px;
@@ -543,7 +575,7 @@
   padding: 3px 7px;
   border: 1px solid var(--line);
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 12px;
   text-transform: capitalize;
 }
 .job-state[data-state="failed"],
@@ -596,15 +628,11 @@
     gap: 2px;
   }
   .import-steps button {
+    flex-direction: column;
     justify-content: center;
+    gap: 4px;
     padding: 8px 2px;
-  }
-  .import-steps button > span:last-child {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
+    font-size: 12px;
   }
   .field-grid,
   .tag-options,
@@ -623,5 +651,84 @@
   .review-summary dl,
   .job-progress {
     grid-template-columns: 110px minmax(0, 1fr);
+  }
+}
+.source-advanced {
+  margin: 16px 0;
+}
+.source-advanced summary {
+  cursor: pointer;
+  padding: 12px 0;
+}
+.processor-tabs {
+  display: none;
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+.processor-tabs button[aria-pressed="true"] {
+  background: var(--accent-tint);
+  border-color: var(--accent);
+}
+.import-body {
+  scroll-padding-bottom: 120px;
+}
+@media (max-width: 1099px) {
+  .processor-tabs {
+    display: flex;
+    gap: 8px;
+    margin: 16px 0;
+  }
+  .processor-layout[data-tab="processor"] .source-sample-pane,
+  .processor-layout[data-tab="preview"] .source-sample-pane,
+  .processor-layout[data-tab="input"] .processor-code,
+  .processor-layout[data-tab="preview"] .processor-code,
+  .processor-preview:not([data-tab="preview"]) {
+    display: none;
+  }
+}
+
+.import-body:has(.processor-card) {
+  width: calc(100% - 48px);
+  max-width: none;
+}
+@media (max-width: 767px) {
+  .import-body,
+  .import-body:has(.processor-card) {
+    width: calc(100% - 32px);
+  }
+}
+.import-next-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.import-navigation {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  background: var(--gray-0);
+  border-top: 1px solid var(--line);
+}
+.job-cards {
+  display: none;
+}
+@media (max-width: 999px) {
+  .job-table {
+    display: none;
+  }
+  .job-cards {
+    display: grid;
+    gap: 12px;
+  }
+  .job-cards li {
+    padding: 16px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow-wrap: anywhere;
+  }
+  .job-cards a {
+    font-weight: 600;
   }
 }

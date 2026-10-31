@@ -7,7 +7,11 @@ from typing import Literal, Protocol
 from uuid import uuid4
 
 from llm_evaluation_hub.core.datasets.catalog import ImportStore
-from llm_evaluation_hub.core.datasets.processing import RowProcessingError, require_segments
+from llm_evaluation_hub.core.datasets.processing import (
+    RowProcessingError,
+    require_segments,
+    validate_segment_declaration,
+)
 from llm_evaluation_hub.imports.contracts import (
     PROCESSOR_CONTRACT_VERSION,
     RUNTIME_POLICY_VERSION,
@@ -40,12 +44,11 @@ class SampleLookupError(LookupError):
         super().__init__(f"{resource} expired." if expired else f"{resource} not found.")
 
 
-def execute_preview(
-    rows: list[dict[str, object]], source_code: str, segment_keys: list[str]
-) -> dict[str, object]:
+def execute_preview(rows: list[dict[str, object]], source_code: str) -> dict[str, object]:
     """Run the real sandbox and retain safe per-row outcomes, including skips."""
     results: list[PreviewRow] = []
     kept, dropped = 0, 0
+    inferred_keys: list[str] | None = None
     with ProcessorRunner(source_code) as runner:
         source_hash, runtime_version = runner.source_hash, runner.runtime_version
         for index, row in enumerate(rows):
@@ -56,11 +59,13 @@ def execute_preview(
                     dropped += 1
                 else:
                     try:
-                        require_segments(example, segment_keys, index)
-                    except RowProcessingError as error:
+                        if inferred_keys is None:
+                            inferred_keys = validate_segment_declaration(list(example.segments))
+                        require_segments(example, inferred_keys, index)
+                    except (RowProcessingError, ValueError) as error:
                         raise ProcessorError(
                             "validation",
-                            "Segment keys must match the declared keys.",
+                            "Segment keys must match the first retained row.",
                             field_path="segments",
                         ) from error
                     results.append(PreviewRow(source_index=index, status="kept", example=example))
@@ -86,7 +91,8 @@ def execute_preview(
         "rows": [row.model_dump(mode="json") for row in results],
         "rows_kept": kept,
         "rows_dropped": dropped,
-        "valid": all(row.status != "failed" for row in results),
+        "segment_keys": inferred_keys or [],
+        "valid": kept > 0 and all(row.status != "failed" for row in results),
     }
 
 
@@ -132,13 +138,16 @@ class PreviewService:
             {
                 "rows": sample.rows,
                 "source_code": request.source_code,
-                "segment_keys": request.segment_keys,
             },
             timeout=30,
         )
         view = PreviewView.model_validate(
             {
-                **{key: value for key, value in result.items() if key != "runtime_version"},
+                **{
+                    key: value
+                    for key, value in result.items()
+                    if key not in {"runtime_version", "segment_keys"}
+                },
                 "id": str(uuid4()) if result["valid"] else None,
                 "sample_id": sample.id,
                 "resolved_sha": sample.resolved_sha,
@@ -154,7 +163,7 @@ class PreviewService:
                     "resolved_sha": sample.resolved_sha,
                     "source_code": request.source_code,
                     "source_hash": view.source_hash,
-                    "segment_keys": request.segment_keys,
+                    "segment_keys": result["segment_keys"],
                     "processor_contract_version": PROCESSOR_CONTRACT_VERSION,
                     "runtime_policy_version": RUNTIME_POLICY_VERSION,
                     "runtime_version": result["runtime_version"],

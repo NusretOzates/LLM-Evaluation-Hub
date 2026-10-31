@@ -1,17 +1,20 @@
-import { ArrowLeft, ArrowRight, Check, LoaderCircle, Plus, RotateCcw, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, LoaderCircle, RotateCcw, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useRouteLoaderData } from "react-router";
-import { CatalogError, flattenTags, listDatasets } from "../../catalog";
+import { CatalogError, listDatasets } from "../../catalog";
 import type { clientLoader as rootLoader } from "../../root";
 import { AvailableTools } from "../../shared/available-tools";
-import { CatalogAlert } from "../../shell";
+import { TagPicker, toggleTagPath } from "../../shared/tag-picker";
+import { CatalogAlert } from "../../shared/feedback";
+import { Button } from "../../shared/controls";
+import { Dialog } from "../../shared/dialog";
 import type { DatasetPreview, ImportLimits, SourceCoordinates, SourceSample } from "./contracts";
 import { ProcessorEditor } from "./processor-editor";
 import { getImport, getImportSources, loadSourceSample, runDatasetPreview, submitImport } from "./transport";
 import type { Route } from "./+types/new";
 
-const STEPS = ["Details", "Source", "Segments", "Processor", "Review"] as const;
-const RESERVED_SEGMENT_KEYS = ["source_index", "conversation", "tools", "expected_output", "extras"] as const;
+const STEPS = ["Details", "Source", "Processor", "Review"] as const;
+const RESERVED_SEGMENT_KEYS = ["source_index", "conversation", "tools", "expected_output", "extras"];
 const TEMPLATE = `def process(row: dict) -> dict | None:\n    # Return None to intentionally skip a source row.\n    return {\n        "conversation": [\n            {"role": "user", "content": row["text"]}\n        ],\n        "tools": [],\n        "expected_output": row.get("label"),\n        "segments": {},\n    }\n`;
 
 type Draft = {
@@ -47,19 +50,29 @@ export default function NewDatasetImport({ loaderData }: Route.ComponentProps) {
   const navigate = useNavigate();
 
   const [step, setStep] = useState(0);
+  const importBody = useRef<HTMLDivElement>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Each step starts at the top of its own content.
+  useEffect(() => {
+    importBody.current?.scrollTo({ top: 0 });
+  }, [step]);
+  const [furthestStep, setFurthestStep] = useState(0);
+  const [processorTab, setProcessorTab] = useState<"input" | "processor" | "preview">("processor");
   const [draft, setDraft] = useState<Draft>(initialDraft);
   const [codeEdited, setCodeEdited] = useState(false);
-  const [tagQuery, setTagQuery] = useState("");
+  const [replacement, setReplacement] = useState<
+    { kind: "columns"; columns: string[] } | { kind: "template"; mode: "none" | "source" | "json" } | null
+  >(null);
+  const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
   const [sample, setSample] = useState<SourceSample | null>(null);
   const [preview, setPreview] = useState<DatasetPreview | null>(null);
   const [selectedRow, setSelectedRow] = useState(0);
-  const [computedKey, setComputedKey] = useState("");
 
   const [loadingSample, setLoadingSample] = useState(false);
   const [runningPreview, setRunningPreview] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [checkingName, setCheckingName] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const nameInput = useRef<HTMLInputElement>(null);
   const [nameError, setNameError] = useState<string | null>(null);
   const sampleRequest = useRef(0);
   const previewRequest = useRef(0);
@@ -102,6 +115,7 @@ export default function NewDatasetImport({ loaderData }: Route.ComponentProps) {
     setSample(null);
     setPreview(null);
     setCodeEdited(true);
+    setSelectedColumns([]);
   }, [loaderData.retryJob]);
   useEffect(() => {
     setDraft((current) =>
@@ -113,11 +127,10 @@ export default function NewDatasetImport({ loaderData }: Route.ComponentProps) {
 
   if (catalog === undefined) throw new CatalogError("The catalog could not be loaded.", 500);
 
-  const existingTags = flattenTags(catalog.tags);
   const limits: ImportLimits = loaderData.sources.limits;
   const sourceBytes = new TextEncoder().encode(draft.code).byteLength;
-  const visibleTags = existingTags.filter((tag) => tag.path.toLowerCase().includes(tagQuery.toLowerCase()));
-  const livePreview = preview?.valid && preview.id !== null && Date.parse(preview.expires_at) > Date.now();
+  const livePreview =
+    preview?.valid && preview.id !== null && preview.rows_kept > 0 && Date.parse(preview.expires_at) > Date.now();
   const raw = sample?.rows[selectedRow] ?? null;
   const diagnosticLine = preview?.rows.find((row) => row.status === "failed")?.error?.line ?? null;
 
@@ -139,6 +152,7 @@ export default function NewDatasetImport({ loaderData }: Route.ComponentProps) {
   }
   const updateSource = (change: Partial<SourceCoordinates>) => {
     setDraft((current) => ({ ...current, source: { ...current.source, ...change } }));
+    setSelectedColumns([]);
     invalidateSource();
   };
   const updateCode = (code: string) => {
@@ -146,15 +160,29 @@ export default function NewDatasetImport({ loaderData }: Route.ComponentProps) {
     setDraft((current) => ({ ...current, code }));
     setCodeEdited(true);
   };
-  const toggleSegment = (key: string) => {
-    invalidatePreview();
-    setDraft((current) => ({
-      ...current,
-      segment_keys: current.segment_keys.includes(key)
-        ? current.segment_keys.filter((item) => item !== key)
-        : [...current.segment_keys, key],
-    }));
+  const toggleColumn = (key: string) => {
+    const selected = selectedColumns.includes(key)
+      ? selectedColumns.filter((column) => column !== key)
+      : [...selectedColumns, key];
+    if (codeEdited) {
+      setReplacement({ kind: "columns", columns: selected });
+      return;
+    }
+    setSelectedColumns(selected);
   };
+  function confirmReplacement() {
+    if (!replacement) return;
+    const columns = sample?.columns.map((column) => column.name) ?? [];
+    if (replacement.kind === "columns") {
+      setSelectedColumns(replacement.columns);
+      setDraft((current) => ({ ...current, code: templateFor(replacement.columns, columns) }));
+    } else {
+      setDraft((current) => ({ ...current, code: templateFor(selectedColumns, columns, replacement.mode) }));
+    }
+    setCodeEdited(true);
+    invalidatePreview();
+    setReplacement(null);
+  }
 
   async function loadSample() {
     invalidateSource();
@@ -199,9 +227,14 @@ export default function NewDatasetImport({ loaderData }: Route.ComponentProps) {
     setRunningPreview(true);
     setError(null);
     try {
-      const result = await runDatasetPreview(sample.id, draft.code, draft.segment_keys, controller.signal);
+      const result = await runDatasetPreview(sample.id, draft.code, controller.signal);
       if (requestId !== previewRequest.current) return;
       setPreview(result);
+      setProcessorTab("preview");
+      if (!result.valid || result.rows_kept === 0)
+        requestAnimationFrame(() => document.getElementById("preview-results-title")?.focus());
+      const kept = result.rows.find((row) => row.status === "kept");
+      setDraft((current) => ({ ...current, segment_keys: Object.keys(kept?.example?.segments ?? {}) }));
       setSelectedRow(0);
     } catch (cause) {
       if (requestId === previewRequest.current) {
@@ -223,7 +256,7 @@ export default function NewDatasetImport({ loaderData }: Route.ComponentProps) {
       return;
     }
     if (!livePreview || preview?.id === null || preview === null || Date.parse(preview.expires_at) <= Date.now()) {
-      setStep(3);
+      setStep(2);
       setError("Run a fresh, valid preview before importing.");
       return;
     }
@@ -237,6 +270,7 @@ export default function NewDatasetImport({ loaderData }: Route.ComponentProps) {
         if (latest.some((dataset) => dataset.name === name)) {
           setStep(0);
           setNameError("A dataset with this name already exists.");
+          nameInput.current?.focus();
           return;
         }
       }
@@ -258,6 +292,7 @@ export default function NewDatasetImport({ loaderData }: Route.ComponentProps) {
       const name = draft.name.trim();
       if (name === "") {
         setNameError("Enter a dataset name.");
+        nameInput.current?.focus();
         return;
       }
       if (nameCheck.current !== null) return;
@@ -269,8 +304,10 @@ export default function NewDatasetImport({ loaderData }: Route.ComponentProps) {
         if (controller.signal.aborted || nameCheck.current !== controller) return;
         if (latest.some((dataset) => dataset.name === name)) {
           setNameError("A dataset with this name already exists.");
+          nameInput.current?.focus();
           return;
         }
+        setFurthestStep((current) => Math.max(current, 1));
         setStep((current) => (current === 0 ? 1 : current));
       } catch (cause) {
         if (!controller.signal.aborted && nameCheck.current === controller) setError(message(cause));
@@ -286,21 +323,25 @@ export default function NewDatasetImport({ loaderData }: Route.ComponentProps) {
       setError("Load a source sample before continuing.");
       return;
     }
-    if (step === 3 && !livePreview) {
+    if (step === 2 && !livePreview) {
       setError("Run a fresh, valid preview before continuing.");
       return;
     }
-    if (step === 2 && !codeEdited) {
+    if (step === 1 && !codeEdited) {
       const columns = sample?.columns.map((column) => column.name) ?? [];
-      setDraft((current) => ({ ...current, code: templateFor(current.segment_keys, columns) }));
+      setDraft((current) => ({ ...current, code: templateFor(selectedColumns, columns) }));
       setCodeEdited(true);
     }
-    setStep((current) => Math.min(4, current + 1));
+    setFurthestStep((current) => Math.max(current, Math.min(3, step + 1)));
+    setStep((current) => Math.min(3, current + 1));
   }
   function applyTemplate(toolsMode: "none" | "source" | "json") {
-    if (codeEdited && !window.confirm("Replace the current processor code? Your edits will be lost.")) return;
+    if (codeEdited) {
+      setReplacement({ kind: "template", mode: toolsMode });
+      return;
+    }
     const columns = sample?.columns.map((column) => column.name) ?? [];
-    setDraft((current) => ({ ...current, code: templateFor(current.segment_keys, columns, toolsMode) }));
+    setDraft((current) => ({ ...current, code: templateFor(selectedColumns, columns, toolsMode) }));
     setCodeEdited(true);
     invalidatePreview();
   }
@@ -315,11 +356,8 @@ export default function NewDatasetImport({ loaderData }: Route.ComponentProps) {
           <span aria-hidden="true">/</span>
           <h1>Add dataset</h1>
         </nav>
-        <Link className="button-ghost button-small" to="/dataset-imports">
-          Import jobs
-        </Link>
       </header>
-      <div className="import-body">
+      <div className="import-body" ref={importBody}>
         <ol aria-label="Import steps" className="import-steps">
           {STEPS.map((label, index) => (
             <li
@@ -328,16 +366,10 @@ export default function NewDatasetImport({ loaderData }: Route.ComponentProps) {
               key={label}
             >
               <button
-                disabled={checkingName}
-                onClick={() => {
-                  if (
-                    index <= step ||
-                    (index === 1 && sample) ||
-                    (index === 2 && sample) ||
-                    (index >= 3 && livePreview)
-                  )
-                    setStep(index);
-                }}
+                disabled={
+                  checkingName || index > furthestStep || (index >= 2 && !sample) || (index === 3 && !livePreview)
+                }
+                onClick={() => setStep(index)}
                 type="button"
               >
                 <span className="step-number">{index < step ? <Check size={13} /> : index + 1}</span>
@@ -351,10 +383,15 @@ export default function NewDatasetImport({ loaderData }: Route.ComponentProps) {
             {error}
           </p>
         ) : null}
+        {step === 0 && nameError ? (
+          <div className="alert" role="alert" tabIndex={-1}>
+            <a href="#dataset-name">Dataset name: {nameError}</a>
+          </div>
+        ) : null}
         {step === 0 ? (
           <section className="import-card" aria-labelledby="details-heading">
             <header>
-              <p className="eyebrow">Step 1 of 5</p>
+              <p className="eyebrow">Step 1 of 4</p>
               <h2 id="details-heading">Dataset details</h2>
               <p>Name the dataset and choose optional catalog tags.</p>
             </header>
@@ -362,6 +399,9 @@ export default function NewDatasetImport({ loaderData }: Route.ComponentProps) {
               Dataset name
               <input
                 aria-describedby={nameError ? "dataset-name-error" : undefined}
+                aria-invalid={nameError ? true : undefined}
+                id="dataset-name"
+                ref={nameInput}
                 autoComplete="off"
                 autoFocus
                 onChange={(event) => {
@@ -385,38 +425,14 @@ export default function NewDatasetImport({ loaderData }: Route.ComponentProps) {
                 Tags <span className="muted">optional</span>
               </legend>
               <p className="hint">Tags classify the whole dataset. Segments classify each example.</p>
-              {existingTags.length === 0 ? (
-                <p className="hint">No tags yet. Add them from the sidebar.</p>
-              ) : (
-                <>
-                  <input
-                    aria-label="Search tags"
-                    className="tag-search"
-                    onChange={(event) => setTagQuery(event.target.value)}
-                    placeholder="Search tags"
-                    value={tagQuery}
-                  />
-                  <div className="tag-options">
-                    {visibleTags.map((tag) => (
-                      <label key={tag.path}>
-                        <input
-                          checked={draft.tags.includes(tag.path)}
-                          onChange={() =>
-                            setDraft({
-                              ...draft,
-                              tags: draft.tags.includes(tag.path)
-                                ? draft.tags.filter((item) => item !== tag.path)
-                                : [...draft.tags, tag.path],
-                            })
-                          }
-                          type="checkbox"
-                        />
-                        <span>{tag.path}</span>
-                      </label>
-                    ))}
-                  </div>
-                </>
-              )}
+              <p className="hint">
+                Choose the most specific tags. A child includes its parents; you can choose multiple branches.
+              </p>
+              <TagPicker
+                tags={catalog.tags}
+                selected={draft.tags}
+                onChange={(path) => setDraft((current) => ({ ...current, tags: toggleTagPath(current.tags, path) }))}
+              />
               {draft.tags.length ? (
                 <div className="chip-list">
                   {draft.tags.map((tag) => (
@@ -447,7 +463,7 @@ export default function NewDatasetImport({ loaderData }: Route.ComponentProps) {
         {step === 1 ? (
           <section className="import-card" aria-labelledby="source-heading">
             <header>
-              <p className="eyebrow">Step 2 of 5</p>
+              <p className="eyebrow">Step 2 of 4</p>
               <h2 id="source-heading">Source and sample</h2>
               <p>Load the first rows to inspect source columns and values. Authentication stays on the server.</p>
             </header>
@@ -462,41 +478,49 @@ export default function NewDatasetImport({ loaderData }: Route.ComponentProps) {
                 />
               </label>
               <label className="import-field">
-                Config <span className="muted">optional</span>
-                <input
-                  onChange={(event) => updateSource({ config: event.target.value || null })}
-                  placeholder="source default"
-                  value={draft.source.config ?? ""}
-                />
-              </label>
-              <label className="import-field">
                 Split
                 <input onChange={(event) => updateSource({ split: event.target.value })} value={draft.source.split} />
               </label>
-              <label className="import-field">
-                Revision
-                <input
-                  onChange={(event) => updateSource({ revision: event.target.value })}
-                  value={draft.source.revision}
-                />
-              </label>
-              <label className="import-field">
-                Source-row limit
-                <input
-                  max={limits.max_rows}
-                  min={1}
-                  onChange={(event) => {
-                    setDraft((current) => ({ ...current, row_limit: Number(event.target.value) }));
-                    invalidateSource();
-                  }}
-                  type="number"
-                  value={draft.row_limit}
-                />
-                <span className="hint">
-                  From 1 to {limits.max_rows.toLocaleString()} rows; sample uses the first {limits.sample_rows} rows.
-                </span>
-              </label>
             </div>
+            <details className="source-advanced">
+              <summary>
+                Advanced source settings · {draft.source.config || "default config"} · {draft.source.revision} ·{" "}
+                {draft.row_limit.toLocaleString()} row limit
+              </summary>
+              <div className="field-grid">
+                <label className="import-field">
+                  Config <span className="muted">optional</span>
+                  <input
+                    onChange={(event) => updateSource({ config: event.target.value || null })}
+                    placeholder="source default"
+                    value={draft.source.config ?? ""}
+                  />
+                </label>
+                <label className="import-field">
+                  Revision
+                  <input
+                    onChange={(event) => updateSource({ revision: event.target.value })}
+                    value={draft.source.revision}
+                  />
+                </label>
+                <label className="import-field">
+                  Source-row limit
+                  <input
+                    max={limits.max_rows}
+                    min={1}
+                    onChange={(event) => {
+                      setDraft((current) => ({ ...current, row_limit: Number(event.target.value) }));
+                      invalidateSource();
+                    }}
+                    type="number"
+                    value={draft.row_limit}
+                  />
+                  <span className="hint">
+                    From 1 to {limits.max_rows.toLocaleString()} rows; sample uses the first {limits.sample_rows} rows.
+                  </span>
+                </label>
+              </div>
+            </details>
             <button
               className="button-ghost"
               disabled={
@@ -529,121 +553,70 @@ export default function NewDatasetImport({ loaderData }: Route.ComponentProps) {
                     </span>
                   ))}
                 </div>
+                <fieldset className="segment-picker">
+                  <legend>Use source columns as segments</legend>
+                  <p className="hint">
+                    Selected columns are added to the starter processor as string values. You can add custom segments in
+                    the next step.
+                  </p>
+                  {sample.columns.map((column) => {
+                    const valid =
+                      /^[A-Za-z_][A-Za-z0-9_]*$/.test(column.name) && !RESERVED_SEGMENT_KEYS.includes(column.name);
+                    return (
+                      <label key={column.name} className={valid ? "" : "is-invalid"}>
+                        <input
+                          type="checkbox"
+                          checked={selectedColumns.includes(column.name)}
+                          disabled={!valid}
+                          onChange={() => toggleColumn(column.name)}
+                        />
+                        <code>{column.name}</code>
+                        {!valid ? <span className="hint">This name cannot be used as a segment key.</span> : null}
+                      </label>
+                    );
+                  })}
+                </fieldset>
                 <RawSample rows={sample.rows} selected={selectedRow} select={setSelectedRow} />
               </div>
             ) : null}
           </section>
         ) : null}
         {step === 2 ? (
-          <section className="import-card" aria-labelledby="segments-heading">
-            <header>
-              <p className="eyebrow">Step 3 of 5</p>
-              <h2 id="segments-heading">Output segments</h2>
-              <p>Your processor computes a string value for every selected key.</p>
-            </header>
-            <p className="contract-note">
-              Your processor must return exactly these segment keys, with a string value for each.
-            </p>
-            <fieldset className="segment-picker">
-              <legend>Choose source-column suggestions</legend>
-              {sample?.columns.map((column) => {
-                const valid =
-                  /^[A-Za-z_][A-Za-z0-9_]*$/.test(column.name) &&
-                  !(RESERVED_SEGMENT_KEYS as readonly string[]).includes(column.name);
-                return (
-                  <label className={valid ? "" : "is-invalid"} key={column.name}>
-                    <input
-                      checked={draft.segment_keys.includes(column.name)}
-                      disabled={!valid}
-                      onChange={() => toggleSegment(column.name)}
-                      type="checkbox"
-                    />
-                    <code>{column.name}</code>
-                    {valid ? null : (
-                      <span className="hint">Not a valid output key; add a valid custom key instead.</span>
-                    )}
-                  </label>
-                );
-              })}
-            </fieldset>
-            <form
-              className="computed-key"
-              onSubmit={(event) => {
-                event.preventDefault();
-                const key = computedKey.trim();
-                if (
-                  /^[A-Za-z_][A-Za-z0-9_]*$/.test(key) &&
-                  !draft.segment_keys.includes(key) &&
-                  !(RESERVED_SEGMENT_KEYS as readonly string[]).includes(key)
-                ) {
-                  invalidatePreview();
-
-                  setDraft((current) => ({ ...current, segment_keys: [...current.segment_keys, key] }));
-                }
-                setComputedKey("");
-              }}
-            >
-              <label className="import-field">
-                Add a computed segment
-                <input
-                  onChange={(event) => setComputedKey(event.target.value)}
-                  placeholder="difficulty_bucket"
-                  value={computedKey}
-                />
-              </label>
-              <span className="hint">
-                Use a unique identifier. Reserved keys: source_index, conversation, tools, expected_output, extras.
-              </span>
-              <button
-                aria-label="Add computed segment"
-                className="icon-button"
-                disabled={
-                  !/^[A-Za-z_][A-Za-z0-9_]*$/.test(computedKey.trim()) ||
-                  draft.segment_keys.includes(computedKey.trim()) ||
-                  (RESERVED_SEGMENT_KEYS as readonly string[]).includes(computedKey.trim())
-                }
-                type="submit"
-              >
-                <Plus size={15} />
-              </button>
-            </form>
-            {draft.segment_keys.length ? (
-              <div className="chip-list">
-                {draft.segment_keys.map((key) => (
-                  <button className="filter-chip" key={key} onClick={() => toggleSegment(key)} type="button">
-                    <code>{key}</code>
-                    <X size={12} />
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p className="hint">No segments selected. Empty selection is valid.</p>
-            )}
-          </section>
-        ) : null}
-        {step === 3 ? (
           <section className="import-card processor-card" aria-labelledby="processor-heading">
             <header>
-              <p className="eyebrow">Step 4 of 5</p>
+              <p className="eyebrow">Step 3 of 4</p>
               <h2 id="processor-heading">Processor and preview</h2>
-              <p>Python maps each raw source row into a conversation, available tools, output and segments.</p>
+              <p>
+                Python maps each raw source row into a conversation, available tools, output and segments. Return the
+                same segment keys with string values for every retained row.
+              </p>
+              <p>
+                To add a custom segment, add an entry to the processor's <code>segments</code> dictionary, for example{" "}
+                <code>"difficulty": "hard" if row["score"] &gt; 5 else "easy"</code>.
+              </p>
             </header>
-            <div className="processor-contract">
+            <details className="processor-contract">
+              <summary>Execution restrictions</summary>
               <p>
                 Return <code>None</code> to skip a row. Only the supported Python subset runs in the isolated processor.
                 Definitions in <code>tools</code> are data; the processor cannot execute them. It has no filesystem,
                 network, OS, or host-call access.
               </p>
-              <strong>
-                Segments:{" "}
-                {draft.segment_keys.length ? (
-                  draft.segment_keys.map((key) => <code key={key}>{key}</code>)
-                ) : (
-                  <code>none</code>
-                )}
-              </strong>
-            </div>
-            <div className="processor-layout">
+            </details>
+            <fieldset className="processor-tabs" aria-label="Processor workspace">
+              {(["input", "processor", "preview"] as const).map((tab) => (
+                <button
+                  className="control-button"
+                  key={tab}
+                  type="button"
+                  aria-pressed={processorTab === tab}
+                  onClick={() => setProcessorTab(tab)}
+                >
+                  {tab === "input" ? "Input" : tab === "processor" ? "Processor" : "Preview"}
+                </button>
+              ))}
+            </fieldset>
+            <div className="processor-layout" data-tab={processorTab}>
               <div className="source-sample-pane">
                 <RawSample compact rows={sample?.rows ?? []} selected={selectedRow} select={setSelectedRow} />
                 <ToolSourcePreview row={raw} />
@@ -651,45 +624,68 @@ export default function NewDatasetImport({ loaderData }: Route.ComponentProps) {
               <div className="processor-code">
                 <div className="processor-toolbar">
                   <strong>Python processor</strong>
-                  <button className="button-ghost button-small" onClick={rebuildTemplate} type="button">
-                    Rebuild starter template
-                  </button>
-                  <button className="button-ghost button-small" onClick={() => applyTemplate("source")} type="button">
-                    Use source tools
-                  </button>
-                  <button className="button-ghost button-small" onClick={() => applyTemplate("json")} type="button">
-                    Parse JSON-string tools
-                  </button>
+                  <details className="processor-templates">
+                    <summary>Replace with a starter template</summary>
+                    <p className="hint">
+                      Choose how the template should read the source row's <code>tools</code> field. This replaces the
+                      entire processor.
+                    </p>
+                    <div className="processor-template-options">
+                      <div>
+                        <button className="button-ghost button-small" onClick={rebuildTemplate} type="button">
+                          No tools
+                        </button>
+                        <span>Always return an empty tools list.</span>
+                      </div>
+                      <div>
+                        <button
+                          className="button-ghost button-small"
+                          onClick={() => applyTemplate("source")}
+                          type="button"
+                        >
+                          Tools as a list
+                        </button>
+                        <span>Use the source tools field directly.</span>
+                      </div>
+                      <div>
+                        <button
+                          className="button-ghost button-small"
+                          onClick={() => applyTemplate("json")}
+                          type="button"
+                        >
+                          Tools as JSON text
+                        </button>
+                        <span>Parse the source tools field if it is a JSON string.</span>
+                      </div>
+                    </div>
+                  </details>
                 </div>
                 <ProcessorEditor diagnosticLine={diagnosticLine} onChange={updateCode} value={draft.code} />
               </div>
             </div>
             <div className="processor-actions">
-              <button
-                className="button-ghost"
-                disabled={runningPreview || sample === null || sourceBytes > limits.max_source_bytes}
-                onClick={() => void runPreview()}
-                type="button"
-              >
-                {runningPreview ? <LoaderCircle className="spin" size={14} /> : null}Run preview
-              </button>
-              {preview?.valid && preview.rows_kept === 0 ? (
+              {preview && preview.rows_kept === 0 ? (
                 <p className="warning-note">
-                  All sampled rows were skipped. This is allowed for preview; the full import must retain at least one
-                  row.
+                  All sampled rows were skipped. Retain at least one sample row to determine the segment keys.
                 </p>
               ) : null}
             </div>
             <p className="hint">
               Processor source: {sourceBytes.toLocaleString()} / {limits.max_source_bytes.toLocaleString()} bytes.
             </p>
-            {preview ? <PreviewResults preview={preview} selected={selectedRow} select={setSelectedRow} /> : null}
+            <div className="processor-preview" data-tab={processorTab}>
+              {preview ? (
+                <PreviewResults preview={preview} selected={selectedRow} select={setSelectedRow} />
+              ) : (
+                <p>Run preview to see results.</p>
+              )}
+            </div>
           </section>
         ) : null}
-        {step === 4 ? (
+        {step === 3 ? (
           <section className="import-card" aria-labelledby="review-heading">
             <header>
-              <p className="eyebrow">Step 5 of 5</p>
+              <p className="eyebrow">Step 4 of 4</p>
               <h2 id="review-heading">Review import</h2>
               <p>Check the pinned source, processor, segments and row-level output before import.</p>
             </header>
@@ -718,29 +714,56 @@ export default function NewDatasetImport({ loaderData }: Route.ComponentProps) {
             <ArrowLeft size={14} />
             Back
           </button>
-          <span>{step + 1} / 5</span>
-          {step < 4 ? (
-            <button
-              className="button-ghost"
-              disabled={checkingName || (step === 1 && sample === null) || (step === 3 && !livePreview)}
-              onClick={continueStep}
-              type="button"
-            >
-              {step === 3 ? "Continue to review" : "Continue"}
-              <ArrowRight size={14} />
-            </button>
-          ) : (
-            <button
-              className="button-ghost"
-              disabled={submitting || !livePreview}
-              onClick={() => void submit()}
-              type="button"
-            >
-              {submitting ? <LoaderCircle className="spin" size={14} /> : null}Import dataset
-            </button>
-          )}
+          <span>{step + 1} / 4</span>
+          <div className="import-next-actions">
+            {step === 2 && (
+              <Button
+                variant="primary"
+                type="button"
+                loading={runningPreview}
+                disabled={sample === null || sourceBytes > limits.max_source_bytes}
+                onClick={() => void runPreview()}
+              >
+                Run preview
+              </Button>
+            )}
+            {step < 3 ? (
+              <Button
+                variant={step === 2 ? "secondary" : "primary"}
+                disabled={checkingName || (step === 1 && sample === null) || (step === 2 && !livePreview)}
+                onClick={continueStep}
+                type="button"
+              >
+                {step === 2 ? "Continue to review" : "Continue"}
+                <ArrowRight size={14} />
+              </Button>
+            ) : (
+              <Button
+                variant="primary"
+                loading={submitting}
+                disabled={!livePreview}
+                onClick={() => void submit()}
+                type="button"
+              >
+                {submitting ? "Starting import…" : "Import dataset"}
+              </Button>
+            )}
+          </div>
         </footer>
       </div>
+      <Dialog
+        open={replacement !== null}
+        title="Replace processor code?"
+        description="This replaces the current processor code and invalidates its preview."
+        onClose={() => setReplacement(null)}
+      >
+        <Button autoFocus type="button" onClick={() => setReplacement(null)}>
+          Cancel
+        </Button>
+        <Button type="button" onClick={confirmReplacement}>
+          Replace code
+        </Button>
+      </Dialog>
     </div>
   );
 }
@@ -798,7 +821,9 @@ function PreviewResults({
   return (
     <section className="preview-results" aria-labelledby="preview-results-title">
       <div className="preview-head">
-        <h3 id="preview-results-title">Preview rows</h3>
+        <h3 id="preview-results-title" tabIndex={-1}>
+          Preview rows
+        </h3>
         <span>
           {preview.rows_kept} kept · {preview.rows_dropped} skipped ·{" "}
           {preview.rows.filter((row) => row.status === "failed").length} failed
@@ -907,7 +932,7 @@ function ReviewSummary({
         <h3>
           Segments{" "}
           <button onClick={() => onEdit(2)} type="button">
-            Edit
+            Edit processor
           </button>
         </h3>
         <p>{draft.segment_keys.join(", ") || "None"}</p>
@@ -915,7 +940,7 @@ function ReviewSummary({
       <section>
         <h3>
           Processor{" "}
-          <button onClick={() => onEdit(3)} type="button">
+          <button onClick={() => onEdit(2)} type="button">
             Edit
           </button>
         </h3>
@@ -947,7 +972,7 @@ function ReviewSummary({
             <PreviewExample row={keptRows[Math.min(row, keptRows.length - 1)] ?? null} />
           </>
         ) : (
-          <p className="warning-note">All sample rows were skipped; the full dataset must retain at least one row.</p>
+          <p className="warning-note">Run a preview that retains at least one sample row before continuing.</p>
         )}
       </section>
     </div>

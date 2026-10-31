@@ -11,6 +11,7 @@ import type { Route } from "./+types/root";
 import "./app.css";
 import { listDatasets, listTags } from "./catalog";
 import { Shell, ShellSkeleton } from "./shell";
+import { ThemeProvider } from "./shared/theme";
 
 export function meta() {
   return [{ title: "Evaluation hub" }];
@@ -27,16 +28,23 @@ export function shouldRevalidate({
   formMethod,
   nextUrl,
 }: ShouldRevalidateFunctionArgs) {
-  if (formMethod !== undefined || currentUrl.pathname !== nextUrl.pathname) return defaultShouldRevalidate;
+  if (formMethod !== undefined || currentUrl.pathname !== nextUrl.pathname || currentUrl.href === nextUrl.href)
+    return defaultShouldRevalidate;
   return false;
 }
 
 export function Layout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <script
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: static first-paint theme bootstrap contains no user input.
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var p=localStorage.getItem('evaluation-hub.theme');var t=p==='dark'||p==='light'?p:(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.dataset.theme=t;document.documentElement.style.colorScheme=t}catch(e){var t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.dataset.theme=t;document.documentElement.style.colorScheme=t}})()`,
+          }}
+        />
         <Meta />
         <Links />
       </head>
@@ -50,7 +58,11 @@ export function Layout({ children }: { children: ReactNode }) {
 }
 
 export default function App({ loaderData }: Route.ComponentProps) {
-  return <Shell datasets={loaderData.datasets} tags={loaderData.tags} />;
+  return (
+    <ThemeProvider>
+      <Shell datasets={loaderData.datasets} />
+    </ThemeProvider>
+  );
 }
 
 export function HydrateFallback() {

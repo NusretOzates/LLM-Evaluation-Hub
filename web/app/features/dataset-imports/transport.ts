@@ -46,12 +46,11 @@ export async function loadSourceSample(
 export async function runDatasetPreview(
   sample_id: string,
   source_code: string,
-  segment_keys: string[],
   signal?: AbortSignal,
 ): Promise<DatasetPreview> {
   return request(
     "/dataset-previews",
-    { method: "POST", body: JSON.stringify({ sample_id, source_code, segment_keys }), signal },
+    { method: "POST", body: JSON.stringify({ sample_id, source_code }), signal },
     parsePreview,
   );
 }

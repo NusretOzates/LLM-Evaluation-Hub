@@ -13,7 +13,21 @@ export function subtreeCounts(datasets: Dataset[]): Map<string, number> {
   return counts;
 }
 
-export function datasetsUnder(datasets: Dataset[], tag: string | null): Dataset[] {
-  if (tag === null || tag === "") return datasets;
-  return datasets.filter((dataset) => dataset.tags.some((path) => path === tag || path.startsWith(`${tag}/`)));
+export function parseCatalogFilters(params: URLSearchParams): { query: string; tags: string[] } {
+  return { query: params.get("q") ?? "", tags: [...new Set(params.getAll("tag").filter(Boolean))] };
+}
+
+export function filterDatasets(
+  datasets: Dataset[],
+  filters: { query: string; tags: string[] },
+  availableTagPaths: Set<string>,
+): Dataset[] {
+  const query = filters.query.trim().toLocaleLowerCase();
+  return datasets.filter(
+    (dataset) =>
+      dataset.name.toLocaleLowerCase().includes(query) &&
+      filters.tags.every(
+        (tag) => availableTagPaths.has(tag) && dataset.tags.some((path) => path === tag || path.startsWith(`${tag}/`)),
+      ),
+  );
 }

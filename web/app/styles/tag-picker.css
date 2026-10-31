@@ -1,0 +1,95 @@
+.hierarchy-picker {
+  min-width: 0;
+  font-size: 13px;
+}
+.hierarchy-picker > input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: var(--gray-0);
+}
+.hierarchy-options {
+  max-height: 280px;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-top: 0;
+  border-radius: 0 0 var(--radius) var(--radius);
+  background: var(--gray-0);
+}
+.hierarchy-options ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.hierarchy-options li > ul {
+  margin-left: 17px;
+  padding-left: 12px;
+  border-left: 1px solid var(--line);
+}
+.hierarchy-row {
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+}
+.hierarchy-row:hover,
+.hierarchy-root:hover {
+  background: var(--gray-1);
+}
+.hierarchy-row[data-selected] {
+  background: var(--accent-tint);
+}
+.hierarchy-row label,
+.hierarchy-root {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  gap: 8px;
+  min-width: 0;
+  padding: 7px 4px;
+  cursor: pointer;
+}
+.hierarchy-row label > span {
+  overflow-wrap: anywhere;
+}
+.hierarchy-picker input[type="checkbox"],
+.hierarchy-picker input[type="radio"] {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--accent);
+}
+.hierarchy-picker small {
+  color: var(--text-2);
+  font-size: 12px;
+}
+.hierarchy-row small {
+  margin-left: auto;
+  padding-left: 6px;
+}
+.hierarchy-toggle,
+.hierarchy-spacer {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+}
+.hierarchy-toggle {
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.hierarchy-root {
+  padding-left: 4px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+}
+.hierarchy-root small {
+  display: block;
+}

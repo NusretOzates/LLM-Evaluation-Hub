@@ -124,8 +124,8 @@ def test_examples_are_paged(catalog_root: Path, client: TestClient) -> None:
     assert page["total"] == 3
     assert page["offset"] == 0
     assert page["limit"] == 1
-    assert page["examples"][0]["conversation"][1]["content"] == "alpha"
-    assert second.json()["examples"][0]["conversation"][1]["content"] == "beta"
+    assert page["examples"][0]["conversation"][0]["content"] == "alpha"
+    assert second.json()["examples"][0]["conversation"][0]["content"] == "beta"
     assert past_end.json()["examples"] == []
     assert too_large.status_code == 422
     assert (

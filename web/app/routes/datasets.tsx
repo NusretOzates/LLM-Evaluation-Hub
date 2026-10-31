@@ -1,10 +1,14 @@
-import { Database, Plus, X } from "lucide-react";
-import { Link, useRouteLoaderData } from "react-router";
+import { DatasetMenu } from "../shared/dataset-menu";
+import { Database, Plus } from "lucide-react";
+import { Link, useRouteLoaderData, useSearchParams } from "react-router";
+import { Button, FilterChip, SearchField } from "../shared/controls";
+import { toggleTagPath } from "../shared/tag-picker";
+import { DatasetTagFilter } from "../features/dataset-catalog-filter";
 
-import { CatalogError, createTags, flattenTags, tagForest, type Dataset } from "../catalog";
-import { CatalogAlert, type TagActionData } from "../shell";
+import { CatalogError, flattenTags, type Dataset } from "../catalog";
+import { CatalogAlert } from "../shared/feedback";
 import type { clientLoader as rootLoader } from "../root";
-import { datasetsUnder } from "../shared/catalog-view";
+import { filterDatasets, parseCatalogFilters } from "../shared/catalog-view";
 import { formatCount, formatDate } from "../shared/format";
 import type { Route } from "./+types/datasets";
 
@@ -17,56 +21,91 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
   return { tag };
 }
 
-export async function clientAction({ request }: Route.ClientActionArgs): Promise<TagActionData> {
-  const form = await request.formData();
-  const name = String(form.get("name") ?? "").trim();
-  const parent = String(form.get("parent") ?? "").trim();
-  if (name === "" || name.includes("/")) {
-    return { error: "A tag name cannot be empty or contain /." };
-  }
-  try {
-    await createTags(tagForest(parent, name));
-  } catch (error) {
-    if (error instanceof CatalogError) return { error: error.message };
-    throw error;
-  }
-  return { created: true };
-}
-
-export default function Datasets({ loaderData }: Route.ComponentProps) {
-  const { tag } = loaderData;
+export default function Datasets() {
+  const [params, setParams] = useSearchParams();
   const catalog = useRouteLoaderData<typeof rootLoader>("root");
   if (catalog === undefined) throw new CatalogError("The catalog could not be loaded.", 500);
-  if (tag && !flattenTags(catalog.tags).some((node) => node.path === tag)) {
-    return <CatalogAlert error={new CatalogError(`Unknown tag: ${tag}`, 404)} />;
+  const { query, tags } = parseCatalogFilters(params);
+  const available = new Set(flattenTags(catalog.tags).map((node) => node.path));
+  const datasets = filterDatasets(catalog.datasets, { query, tags }, available);
+  function updateTags(next: string[]) {
+    const updated = new URLSearchParams(params);
+    updated.delete("tag");
+    for (const tag of next) updated.append("tag", tag);
+    setParams(updated);
   }
-  const datasets = datasetsUnder(catalog.datasets, tag);
+  function clearFilters() {
+    const updated = new URLSearchParams(params);
+    updated.delete("q");
+    updated.delete("tag");
+    setParams(updated);
+  }
   return (
     <div className="page">
       <header className="topbar">
         <div className="title-row">
           <h1>Datasets</h1>
           <span className="title-count mono">{datasets.length}</span>
-          {tag === null ? null : (
-            <span className="filter-token">
-              <span className="mono">{tag}</span>
-              <Link aria-label="Clear tag filter" className="token-clear" to="/datasets">
-                <X aria-hidden="true" size={12} strokeWidth={2} />
-              </Link>
-            </span>
-          )}
         </div>
         <div className="topbar-actions">
-          <Link className="button-ghost button-small" to="/dataset-imports">
-            Import jobs
-          </Link>
           <Link className="button-ghost button-small" to="/dataset-imports/new">
             <Plus aria-hidden="true" size={13} />
             Add dataset
           </Link>
         </div>
       </header>
-      {datasets.length === 0 ? <EmptyDatasets tag={tag} /> : <DatasetTable datasets={datasets} />}
+      <div className="catalog-toolbar">
+        <SearchField
+          id="dataset-search"
+          label="Search datasets"
+          value={query}
+          onChange={(value) => {
+            const updated = new URLSearchParams(params);
+            if (value) updated.set("q", value);
+            else updated.delete("q");
+            setParams(updated, { replace: true });
+          }}
+        />
+        <DatasetTagFilter
+          tags={catalog.tags}
+          selected={tags}
+          onChange={(path) => updateTags(toggleTagPath(tags, path))}
+        />
+      </div>
+      {tags.length > 0 || query ? (
+        <div className="catalog-chips">
+          <span>Match all selected tags</span>
+          {tags.map((tag) => (
+            <FilterChip
+              key={tag}
+              label={tag}
+              unavailable={!available.has(tag)}
+              onRemove={() => updateTags(tags.filter((item) => item !== tag))}
+            />
+          ))}
+          <Button variant="quiet" type="button" onClick={clearFilters}>
+            Clear filters
+          </Button>
+        </div>
+      ) : null}
+      <p className="catalog-result-count" aria-live="polite">
+        {datasets.length} datasets
+      </p>
+      {datasets.length === 0 ? (
+        catalog.datasets.length === 0 && !query && tags.length === 0 ? (
+          <EmptyDatasets />
+        ) : (
+          <div className="empty-state">
+            <h2>No matching datasets</h2>
+            <p>Try changing your search or tags.</p>
+            <Button variant="quiet" type="button" onClick={clearFilters}>
+              Clear filters
+            </Button>
+          </div>
+        )
+      ) : (
+        <DatasetTable datasets={datasets} />
+      )}
     </div>
   );
 }
@@ -87,8 +126,43 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
 function DatasetTable({ datasets }: { datasets: Dataset[] }) {
   return (
     <div className="table-wrap">
-      <table className="dataset-table">
+      <div className="dataset-cards">
+        {datasets.map((dataset) => (
+          <article className="dataset-card" key={dataset.id}>
+            <div className="dataset-card-heading">
+              <Link className="row-link" to={`/datasets/${encodeURIComponent(dataset.id)}`}>
+                {dataset.name}
+              </Link>
+              <DatasetMenu dataset={dataset} />
+            </div>
+            <p>{dataset.repo_id ?? dataset.source_type}</p>
+            <p className="cell-sub mono">{sourceDetail(dataset)}</p>
+            <p>{formatCount(dataset.rows_kept)} rows kept</p>
+            <p>{dataset.tags.slice(0, 2).join(", ") || "No tags"}</p>
+            <details>
+              <summary>Details</summary>
+              <p>
+                Retention: <Retention dataset={dataset} />
+              </p>
+              <p>Segments: {dataset.segment_keys.join(", ") || "None"}</p>
+              <p>Tags: {dataset.tags.join(", ") || "None"}</p>
+              <p>Created: {formatDate(dataset.created_at)}</p>
+              <p>Processor: {dataset.processor_id}</p>
+            </details>
+          </article>
+        ))}
+      </div>
+      <table className="dataset-table catalog-table">
         <caption className="sr-only">Datasets</caption>
+        <colgroup>
+          <col style={{ width: "28%" }} />
+          <col style={{ width: "20%" }} />
+          <col style={{ width: "10%" }} />
+          <col style={{ width: "12%" }} />
+          <col style={{ width: "12%" }} />
+          <col />
+          <col style={{ width: "56px" }} />
+        </colgroup>
         <thead>
           <tr>
             <th scope="col">Name</th>
@@ -99,8 +173,8 @@ function DatasetTable({ datasets }: { datasets: Dataset[] }) {
             <th scope="col">Retention</th>
             <th scope="col">Segments</th>
             <th scope="col">Tags</th>
-            <th className="num" scope="col">
-              Created
+            <th scope="col">
+              <span className="sr-only">Actions</span>
             </th>
           </tr>
         </thead>
@@ -111,7 +185,6 @@ function DatasetTable({ datasets }: { datasets: Dataset[] }) {
                 <Link className="row-link" to={`/datasets/${encodeURIComponent(dataset.id)}`}>
                   {dataset.name}
                 </Link>
-                <span className="cell-sub mono">{dataset.processor_id}</span>
               </th>
               <td>
                 <span className="cell-main">{dataset.repo_id ?? dataset.source_type}</span>
@@ -121,16 +194,35 @@ function DatasetTable({ datasets }: { datasets: Dataset[] }) {
               <td>
                 <Retention dataset={dataset} />
               </td>
-              <td className="muted">{dataset.segment_keys.length === 0 ? "—" : dataset.segment_keys.join(", ")}</td>
-              <td className="muted tags-cell" title={dataset.tags.join(", ")}>
-                {dataset.tags.length === 0 ? "—" : dataset.tags.map((tag) => tag.split("/").at(-1)).join(", ")}
+              <td>
+                <Values values={dataset.segment_keys} />
               </td>
-              <td className="num muted">{formatDate(dataset.created_at)}</td>
+              <td>
+                <Values values={dataset.tags} />
+              </td>
+              <td className="dataset-actions">
+                <DatasetMenu dataset={dataset} />
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
     </div>
+  );
+}
+
+function Values({ values }: { values: string[] }) {
+  if (!values.length) return <span>—</span>;
+  return (
+    <span>
+      {values.slice(0, 2).join(", ")}
+      {values.length > 2 && (
+        <details>
+          <summary>+{values.length - 2}</summary>
+          {values.join(", ")}
+        </details>
+      )}
+    </span>
   );
 }
 
@@ -147,33 +239,15 @@ function Retention({ dataset }: { dataset: Dataset }) {
   );
 }
 
-function EmptyDatasets({ tag }: { tag: string | null }) {
-  if (tag === null) {
-    return (
-      <div className="empty-state">
-        <Database aria-hidden="true" size={20} strokeWidth={1.5} />
-        <h2>No datasets yet</h2>
-        <p>Import a dataset from Hugging Face or register one from Python.</p>
-        <Link className="button-ghost" to="/dataset-imports/new">
-          <Plus aria-hidden="true" size={13} />
-          Add dataset
-        </Link>
-        <Link className="button-ghost" to="/dataset-imports">
-          View import jobs
-        </Link>
-        <pre className="mono">{`repo.register("name", source, processor, processor_id="...")`}</pre>
-      </div>
-    );
-  }
+function EmptyDatasets() {
   return (
     <div className="empty-state">
-      <Database aria-hidden="true" size={20} strokeWidth={1.5} />
-      <h2>No datasets under this tag</h2>
-      <p>
-        Datasets tagged <span className="mono">{tag}</span> or any tag inside it appear here.
-      </p>
-      <Link className="button-ghost" to="/datasets">
-        Show all datasets
+      <Database aria-hidden="true" size={20} />
+      <h2>No datasets yet</h2>
+      <p>Import a dataset from Hugging Face or register one from Python.</p>
+      <Link className="button-ghost" to="/dataset-imports/new">
+        <Plus aria-hidden="true" size={16} />
+        Add dataset
       </Link>
     </div>
   );

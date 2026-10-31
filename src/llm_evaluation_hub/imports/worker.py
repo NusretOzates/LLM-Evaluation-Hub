@@ -190,7 +190,6 @@ def worker_main(
             result = execute_preview(
                 cast(list[dict[str, object]], payload["rows"]),
                 cast(str, payload["source_code"]),
-                cast(list[str], payload["segment_keys"]),
             )
         else:
             raise ValueError("Unknown operation")

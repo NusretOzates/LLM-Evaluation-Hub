@@ -1,5 +1,6 @@
 """Serve an isolated synthetic catalog for browser regression tests."""
 
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -37,7 +38,7 @@ def processor(row: dict[str, object]) -> ProcessedExample:
 
 
 def main() -> None:
-    """Run on the same fixed loopback API port used by the Vite test proxy."""
+    """Run a temporary catalog on the configured loopback API port."""
     with TemporaryDirectory(prefix="llm-hub-browser-") as temporary:
         root = Path(temporary)
         repo = DatasetRepository(root)
@@ -50,10 +51,46 @@ def main() -> None:
             processor_id="tests.browser",
             segments=["group"],
         )
+        repo.register(
+            "deletion-target",
+            FixtureSource(),
+            processor,
+            processor_id="tests.browser",
+            segments=["group"],
+            limit=1,
+        )
+        if os.environ.get("WORKBENCH_TEST_ACCEPTANCE") == "1":
+            repo.create_tag("Benchmarks")
+            repo.create_tag("Reasoning", parent="Benchmarks")
+            repo.create_tag("Tool use", parent="Benchmarks")
+            repo.create_tag("Language")
+            repo.create_tag("English", parent="Language")
+            repo.create_tag("Turkish", parent="Language")
+            repo.create_tag("BenchmarksX")
+            for name, tags in (
+                ("Alpha", ["Benchmarks/Reasoning", "Language/English"]),
+                ("Beta", ["Benchmarks/Tool use", "Language/English"]),
+                ("Gamma", ["Benchmarks"]),
+                ("Delta", ["Language/Turkish"]),
+                ("Boundary", ["BenchmarksX"]),
+                ("Long dataset name " * 8, ["Language/English"]),
+                ("Trashed", ["Benchmarks/Reasoning"]),
+            ):
+                record = repo.register(
+                    name,
+                    FixtureSource(),
+                    processor,
+                    processor_id="tests.browser",
+                    tags=tags,
+                    segments=["group"],
+                    limit=1,
+                )
+                if name == "Trashed":
+                    repo.trash(record.id)
         uvicorn.run(
             create_app(root, source_adapter=TrustedSyntheticAdapter()),
             host="127.0.0.1",
-            port=8000,
+            port=int(os.environ.get("WORKBENCH_TEST_API_PORT", "8000")),
         )
 
 

@@ -18,6 +18,7 @@ from llm_evaluation_hub.api.routes import router
 from llm_evaluation_hub.api.schemas import InvalidRequestError
 from llm_evaluation_hub.core.datasets.catalog import (
     DatasetRepository,
+    DuplicateTagError,
     UnknownDatasetError,
     UnknownTagError,
 )
@@ -81,6 +82,11 @@ def _register_errors(application: FastAPI) -> None:
     def unknown_tag(request: Request, exc: UnknownTagError) -> JSONResponse:
         del request  # FastAPI supplies the request to every exception handler.
         return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+    @application.exception_handler(DuplicateTagError)
+    def duplicate_tag(request: Request, exc: DuplicateTagError) -> JSONResponse:
+        del request
+        return JSONResponse(status_code=409, content={"detail": str(exc)})
 
     @application.exception_handler(InvalidRequestError)
     def invalid_value(request: Request, exc: InvalidRequestError) -> JSONResponse:
