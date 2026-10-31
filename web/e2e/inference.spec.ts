@@ -82,6 +82,17 @@ test("configure output and run a local example", async ({ page }) => {
   await expect(page.getByText("Rows 1–20 of 61")).toBeVisible();
   await page.getByRole("button", { name: "Next", exact: true }).click();
   await expect(page.getByText("Rows 21–40 of 61")).toBeVisible();
+  const runUrl = page.url();
+  await page.getByRole("button", { name: "Delete run", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Delete run?" });
+  await expect(dialog).toContainText("61 saved results");
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Run detail" })).toBeVisible();
+  await page.getByRole("button", { name: "Delete run", exact: true }).click();
+  await dialog.getByRole("button", { name: "Delete run", exact: true }).click();
+  await expect(page).toHaveURL(/\/inference$/);
+  const deleted = await page.request.get(`/api/inference/runs/${runUrl.split("/").at(-1)}`);
+  expect(deleted.status()).toBe(404);
 });
 test("independent schema drafts block saving until each is valid", async ({ page }) => {
   await page.goto("/datasets");

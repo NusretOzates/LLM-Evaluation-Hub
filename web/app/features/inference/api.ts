@@ -152,6 +152,7 @@ export const api = {
     request(`/dataset-ids/${encodeURIComponent(id)}/output-format`, parseOutput, output, "PUT"),
   runs: () => request("/inference/runs", (v) => array(v, parseRun)),
   run: (id: string) => request(`/inference/runs/${encodeURIComponent(id)}`, parseRun),
+  deleteRun: (id: string) => request(`/inference/runs/${encodeURIComponent(id)}`, () => undefined, undefined, "DELETE"),
   create: (spec: RunSpec) => request("/inference/runs", parseRun, spec),
   results: (id: string, offset: number, filter: string) => {
     const query = new URLSearchParams({ offset: String(offset), limit: "20" });

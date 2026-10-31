@@ -647,3 +647,50 @@ def test_compiler_defaults_tokens_and_unsupported_media() -> None:
         compile_request(profile, Generation(), OutputFormat(), media)
     with pytest.raises(ValueError, match="conflict"):
         compile_request(profile, Generation(advanced={"response_format": {}}), OutputFormat(), text)
+
+
+@pytest.mark.parametrize(
+    "state", ["completed", "canceled", "interrupted", "queued", "running", "canceling"]
+)
+def test_delete_run_preserves_other_data(tmp_path: Path, state: str) -> None:
+    from fastapi.testclient import TestClient
+
+    from llm_evaluation_hub.api import create_app
+    from llm_evaluation_hub.core.datasets.catalog.storage import catalog_connection
+
+    application = create_app(tmp_path)
+    store = application.state.inference_store
+    record = store.catalog.register(
+        "delete-test",
+        MemorySource(pl.DataFrame({"x": [1]})),
+        lambda row: ProcessedExample.model_validate(
+            {"conversation": [{"role": "user", "content": str(row["x"])}]}
+        ),
+        processor_id="test",
+    )
+    profile = store.save_profile(
+        ConnectionProfile(name="local", base_url="http://localhost:1/v1", model="m")
+    )
+    run = store.create(RunSpec(dataset_ids=[record.id], profile_id=profile.id))
+    other = store.create(RunSpec(dataset_ids=[record.id], profile_id=profile.id))
+    with catalog_connection(tmp_path) as db:
+        db.execute("UPDATE inference_runs SET state = ? WHERE id = ?", (state, run.id))
+        db.execute(
+            "INSERT INTO inference_results VALUES (?, ?, 0, ?)",
+            (run.id, record.id, '{"saved":true}'),
+        )
+    # No lifespan: queued work must not contact a model during this API test.
+    client = TestClient(application)
+    response = client.delete(f"/inference/runs/{run.id}")
+    allowed = state in {"completed", "canceled", "interrupted"}
+    assert response.status_code == (204 if allowed else 409)
+    assert client.get(f"/inference/runs/{run.id}").status_code == (404 if allowed else 200)
+    with catalog_connection(tmp_path) as db:
+        for table in ("inference_results", "inference_run_datasets"):
+            assert db.execute(
+                f"SELECT count(*) FROM {table} WHERE run_id = ?", (run.id,)
+            ).fetchone()[0] == (0 if allowed else 1)
+    assert store.run(other.id).state == "queued"
+    assert store.profile(profile.id).name == "local"
+    assert len(store.catalog.examples(record.name)) == 1
+    assert client.delete("/inference/runs/missing").status_code == 404

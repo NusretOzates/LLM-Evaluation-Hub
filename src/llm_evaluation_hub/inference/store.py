@@ -200,6 +200,19 @@ class InferenceStore:
             ],
         )
 
+    def delete_run(self, run_id: str) -> None:
+        """Delete an inactive run and its results in one transaction."""
+        with catalog_connection(self.root) as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT state FROM inference_runs WHERE id = ?", (run_id,)).fetchone()
+            if row is None:
+                raise KeyError("run not found")
+            if row["state"] not in {"completed", "canceled", "interrupted"}:
+                raise ValueError("Cancel the run and wait for it to stop before deleting it.")
+            db.execute("DELETE FROM inference_results WHERE run_id = ?", (run_id,))
+            db.execute("DELETE FROM inference_run_datasets WHERE run_id = ?", (run_id,))
+            db.execute("DELETE FROM inference_runs WHERE id = ?", (run_id,))
+
     def runs(self) -> list[RunView]:
         """List runs newest first."""
         with catalog_connection(self.root) as db:

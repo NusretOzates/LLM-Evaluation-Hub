@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useRouteLoaderData } from "react-router";
 import { flattenTags } from "../../catalog";
 import type { JsonValue } from "../../catalog-types";
 import type { clientLoader as rootLoader } from "../../root";
+import { ConfirmDialog } from "../../shared/dialog";
 import { Button, StatusLabel } from "../../shared/controls";
 import {
   api,
@@ -487,6 +488,10 @@ export function NewRun() {
 }
 export function RunDetail() {
   const { id = "" } = useParams();
+  const navigate = useNavigate();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const [run, setRun] = useState<Run | null>(null);
   const [results, setResults] = useState<Result[]>([]);
   const [totalResults, setTotalResults] = useState(0);
@@ -531,6 +536,17 @@ export function RunDetail() {
       setError(message(e));
     }
   }
+  async function deleteRun() {
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await api.deleteRun(id);
+      navigate("/inference", { replace: true });
+    } catch (e) {
+      setDeleteError(message(e));
+      setDeleting(false);
+    }
+  }
   async function loadInput(row: Result) {
     const key = `${row.dataset_id}:${row.ordinal}`;
     try {
@@ -548,6 +564,17 @@ export function RunDetail() {
         <h1>Run detail</h1>
         <StatusLabel status={run.state} />
       </header>
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Delete run?"
+        description={`Permanently delete this run and its ${run.completed} saved results? This cannot be undone. Datasets and connections will be kept.`}
+        confirmLabel="Delete run"
+        destructive
+        pending={deleting}
+        error={deleteError}
+        onClose={() => setConfirmDelete(false)}
+        onConfirm={deleteRun}
+      />
       <div className="page-body inference-page">
         {error && (
           <p role="alert" className="field-error">
@@ -565,6 +592,21 @@ export function RunDetail() {
               </Button>
             )}
             {run.state === "interrupted" && <Button onClick={() => void action("resume")}>Resume run</Button>}
+            <Button
+              variant="destructive"
+              disabled={!["completed", "canceled", "interrupted"].includes(run.state)}
+              title={
+                ["queued", "running", "canceling"].includes(run.state)
+                  ? "Cancel the run before deleting it."
+                  : undefined
+              }
+              onClick={() => {
+                setDeleteError("");
+                setConfirmDelete(true);
+              }}
+            >
+              Delete run
+            </Button>
           </div>
           {run.error && (
             <p role="alert" className="field-error">

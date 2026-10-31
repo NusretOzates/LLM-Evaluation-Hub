@@ -131,6 +131,16 @@ def list_runs(request: Request) -> list[RunView]:
     return request.app.state.inference_store.runs()
 
 
+@router.delete("/inference/runs/{run_id}", status_code=204)
+@input_errors
+def delete_run(run_id: str, request: Request) -> None:
+    """Permanently remove an inactive run and its saved responses."""
+    try:
+        request.app.state.inference_store.delete_run(run_id)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from None
+
+
 @router.get("/inference/runs/{run_id}")
 @input_errors
 def get_run(run_id: str, request: Request) -> RunView:
