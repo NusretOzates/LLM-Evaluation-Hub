@@ -12,6 +12,7 @@ from llm_evaluation_hub.core.datasets.processing import (
     require_segments,
     validate_segment_declaration,
 )
+from llm_evaluation_hub.execution.python import ProcessorError
 from llm_evaluation_hub.imports.contracts import (
     PROCESSOR_CONTRACT_VERSION,
     RUNTIME_POLICY_VERSION,
@@ -22,7 +23,7 @@ from llm_evaluation_hub.imports.contracts import (
     SampleRequest,
     SampleView,
 )
-from llm_evaluation_hub.imports.runtime import ProcessorError, ProcessorRunner
+from llm_evaluation_hub.imports.runtime import ProcessorRunner
 
 
 class OperationRunner(Protocol):

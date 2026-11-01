@@ -1,6 +1,6 @@
 # Evaluation of saved inference results
 
-Status: Implementation-ready proposal; read-only backend/frontend handoff reviews completed. Mode: Proposal. Implementation profile: Develop / PoC. The user wants a working result quickly, not a release audit. This is the canonical handoff; implementation has not started.
+Status: Implementation in progress. Mode: Execute. Profile: Develop / PoC. An isolated ten-row exact-match workflow and local fake judge have been exercised. The checklist and verification notes below distinguish completed work from outstanding acceptance items.
 
 ## Goal
 
@@ -158,14 +158,14 @@ Cancel stops dispatch/cancels active tasks/closes method context, preserving com
 
 ## Plan
 
-All implementation boxes remain unchecked. Each unit ends with an observable result. An implementer reads the complete plan and existing diff first, keeps a local ignored show-me-your-work trail and checks units only after verification. The parent integrates; any delegated implementer must own explicit files and preserve other changes.
+Each unit ends with an observable result. Boxes are checked only where the implementation and its stated check have been verified. An implementer reads the complete plan and existing diff first, keeps a local ignored show-me-your-work trail and checks units only after verification. The parent integrates; any delegated implementer must own explicit files and preserve other changes.
 
 ### U1. Contracts, shared execution and method seam
 
 Owner: backend/core. No dependencies.
 
 - [ ] Add evaluation contracts/registry with typed built-in configurations, source context, MethodOutcome, metric/settings/status/summary models. Registry exposes schemas/defaults and generic method metadata. No UI-specific state in domain objects.
-- [ ] Extract neutral Monty execution and rate limiter into execution/. Migrate current import/inference callers without budget/diagnostic changes. Add preprocessing/scoring validation and literal prompt renderer.
+- [x] Extract neutral Monty execution and rate limiter into execution/. Migrate current import/inference callers without budget/diagnostic changes. Add preprocessing/scoring validation and literal prompt renderer.
 - [ ] Implement exact match and a test-only custom method proving prepare/evaluate/cleanup with no scheduler branch.
 
 Check: exact-match and scoring work on JSON fixtures; invalid numeric types/keys/ranges fail clearly. Custom method lifecycle runs. Focused import-runtime and existing inference limiter tests still pass. Avoid speculative abstractions and unrelated refactoring.
@@ -176,7 +176,7 @@ Owner: backend/persistence. Depends on U1 contracts.
 
 - [ ] Add v6 schema/tables/indexes, store CRUD and atomic run creation. Add bounded full evaluation_rows reader and retain inference_rows gold isolation.
 - [ ] Add purge/source-delete/source-resume guards, inactive evaluation deletion and historical input availability.
-- [ ] Rebuild bundled seed as a **fresh v6 catalog** using public registration APIs and existing current-format Parquet examples as fixture input. Retain all five starter names/content/tags. A temporary artifact rebuild can read old seed metadata read-only for fixture names/tags; it must not become a runtime v5 reader, data migration or upgrade path. Remove obsolete reconstruction code after regeneration if not reusable.
+- [x] Rebuild bundled seed as a **fresh v6 catalog** using public registration APIs and existing current-format Parquet examples as fixture input. Retain all five starter names/content/tags. A temporary artifact rebuild can read old seed metadata read-only for fixture names/tags; it must not become a runtime v5 reader, data migration or upgrade path. Remove obsolete reconstruction code after regeneration if not reusable.
 
 Check: isolated current catalog freezes aligned identities, protects unfinished sources, allows source deletion after completion/cancel and retains report evidence. Seed initializes a disposable target and every snapshot reads correctly. Do not touch the live catalog.
 
@@ -228,7 +228,7 @@ Check: same metric across two datasets, failed judgment remains in coverage coun
 Owner: integrating implementer. Depends on U1-U6.
 
 - [ ] Complete verification below, review diff for metric/data invariants and preserved prior changes, update this plan and local decision trail with actual evidence.
-- [ ] Update new docs/modules/evaluation.md plus docs/index.md, docs/project/purpose.md, docs/modules/api.md, docs/architecture/code-map.md and affected import/inference runtime references. Document method registration, contract/coverage semantics, current-schema reset, retention and deferred math/code execution. Keep documentation proportional.
+- [x] Update new docs/modules/evaluation.md plus docs/index.md, docs/project/purpose.md, docs/modules/api.md, docs/architecture/code-map.md and affected import/inference runtime references. Document method registration, contract/coverage semantics, current-schema reset, retention and deferred math/code execution. Keep documentation proportional.
 - [ ] Build images without restarting live services. Prepare a concrete fresh reset/start procedure naming Compose project/volume. Clearly state the reset removes all existing catalog datasets/history/profiles; model container/cache is separate and stays. No silent startup migration/reset. If an active run remains under the prior preserve-running instruction, leave images ready and ask for activation timing.
 - [ ] After separately authorized activation, verify fresh schema and seed, create/import a ten-row fixture and demonstrate exact match. Judge smoke uses a fake local endpoint; actual vLLM usage is an explicit bounded test. Do not run a 500-row evaluation as verification.
 
@@ -238,10 +238,10 @@ Get one thin end-to-end path visible first, then finish targeted guard checks. T
 
 - [ ] Backend focused checks: full-row ID alignment and gold-free inference reader; score finite types/key set/bounds; literal prompt parsing; exact match; deterministic ten-row aggregation with overlap/missing segments; atomic source purge/delete/resume guards; retained evidence after source deletion.
 - [ ] One tiny real-local-HTTP integration covers actual judge wire schema, valid/invalid judgments, incremental persistence, cancel/cleanup and interrupted resume. Assert endpoint admission with a controlled test, not a GPU throughput experiment. Prove a registered test method executes without scheduler/storage/UI branches.
-- [ ] Existing focused tests/imports runtime checks and relevant tests/test_inference.py checks cover shared runtime/limiter extraction. New evaluation tests live in tests/evaluation/. Keep failure permutations in backend tests rather than duplicating them all in browser tests.
+- [x] Existing focused tests/imports runtime checks and relevant tests/test_inference.py checks cover shared runtime/limiter extraction. New evaluation tests live in tests/evaluation/. Keep failure permutations in backend tests rather than duplicating them all in browser tests.
 - [ ] Add isolated web/e2e/evaluation.spec.ts with real API and fake completion endpoint: saved inference -> exact match -> score discovery -> grouped results; judge Markdown variable insertion + shared schema -> two metric keys across two datasets; one invalid result changes coverage; cancel deletion dialog then confirm. Use scripts/serve_test_catalog.py fixtures. Retain existing inference browser smoke for editor moves and prior deletion work. One narrow/light-dark spot check is sufficient.
-- [ ] Focused Ruff lint/format and ty for changed/new owners; frontend typecheck/build and focused Biome; generated API contract check; docs link check. Report inherited failures separately; don't broaden this task to fix unrelated tests.
-- [ ] WSL/Linux for locking/runtime. Node >=22.22 is required; available /home/nusret/.nvm/versions/node/v22.23.4/bin/node. Default /usr/bin/node can be too old. Isolate browser ports with WORKBENCH_TEST_API_PORT and WORKBENCH_TEST_WEB_PORT. Do not stop/reuse localhost:8080 or vLLM:8001 for automated tests.
+- [x] Focused Ruff lint/format and ty for changed/new owners; frontend typecheck/build and focused Biome; generated API contract check; docs link check. Report inherited failures separately; don't broaden this task to fix unrelated tests.
+- [x] WSL/Linux for locking/runtime. Node >=22.22 is required; available /home/nusret/.nvm/versions/node/v22.23.4/bin/node. Default /usr/bin/node can be too old. Isolate browser ports with WORKBENCH_TEST_API_PORT and WORKBENCH_TEST_WEB_PORT. Do not stop/reuse localhost:8080 or vLLM:8001 for automated tests.
 - [ ] Final handoff records demonstrated behavior, actual check results, reset/deployment status and limits. Technical integration does not establish judge accuracy; a ten-row demo is not a benchmark-quality claim.
 
 ## Handoff and completion boundary
@@ -259,3 +259,14 @@ Planning completion checklist:
 - [x] Read-only backend/frontend handoff review and final consistency pass. Resolved generic config/result-schema ownership, frozen prediction eligibility, cancelable endpoint admission, resume/create serialization and row/summary filter scope.
 
 No remaining material product question is intentionally delegated to the implementer. Changes to accepted semantics need feedback; routine private symbol names/layout can follow repository conventions.
+
+
+## Execution evidence and remaining work
+
+- The final focused backend set passed **63 tests**, including nine evaluation tests for numeric score contracts, exact match, literal prompts, source guards, 8/10 coverage with mean 0.875, fake HTTP judge responses, registered method execution, backup and retained evidence, cancellation, endpoint admission, overlapping tags, missing segments and interrupted resume.
+- The isolated evaluation browser smoke passed against the final build. The existing inference/editor browser smoke passed before the last evaluation-only changes. The parent directly inspected and approved setup, schema, report, dark/mobile layout, discovered extra/segment fields, processed-candidate inspection and generation controls. An isolated ten-row exact-match UI run completed 10/10.
+- Focused Ruff lint, Python types, frontend typecheck, focused Biome lint, generated API contract and documentation link checks passed. The final frontend and both Compose images built successfully without restarting live services.
+- The judge prompt picker discovers observed extras and segments. Its generation settings include temperature, top-p, seed, profile-specific effort/thinking and bounded advanced JSON. Row inspection presents the processed candidate separately. A rendered judge prompt is shown as text.
+- The two-dataset/two-metric judge browser scenario remains deferred; local HTTP judge, registered-method and backend aggregation checks cover the component contracts, but do not establish that complete browser scenario or judge accuracy. A ten-row demo is not a benchmark.
+- The isolated preview is at `http://127.0.0.1:18733`; it uses a disposable API catalog on port 18731. A pre-created completed report is at `/evaluations/470dafbe-c8dd-4883-b8f3-788dba52c584`. These preview processes are separate from the live services.
+- Activation remains separately authorized. Compose project is `llm-evaluation-hub`, catalog volume `llm-evaluation-hub_catalog`. After confirming activation timing and taking any needed backup, the concrete fresh-start procedure is `docker compose down`, `docker volume rm llm-evaluation-hub_catalog`, then `LLM_EVAL_SEED=/opt/llm-eval/seed docker compose up -d` from the repository. This permanently removes existing catalog datasets, inference/evaluation history and connection profiles. The model service and model cache are separate. Never perform it while an active inference run must be preserved.

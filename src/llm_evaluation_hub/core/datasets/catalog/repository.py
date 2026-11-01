@@ -158,6 +158,14 @@ class DatasetRepository:
             ).fetchone()
             if dependency is not None:
                 raise DatasetInUseError("dataset is required by an unfinished inference run")
+            dependency = connection.execute(
+                "SELECT 1 FROM evaluation_run_datasets d JOIN evaluation_runs r ON r.id = d.run_id "
+                "WHERE d.dataset_id = ? AND r.state IN "
+                "('queued','running','interrupted','canceling') LIMIT 1",
+                (dataset_id,),
+            ).fetchone()
+            if dependency is not None:
+                raise DatasetInUseError("dataset is required by an unfinished evaluation run")
             canonical = f"datasets/{dataset_id}/rows.parquet"
             if row["parquet_path"] != canonical or str(uuid.UUID(dataset_id)) != dataset_id:
                 raise ValueError("snapshot is not at its owned path")
@@ -408,6 +416,39 @@ class DatasetRepository:
                 )
             )
         return examples
+
+    def evaluation_rows(
+        self, dataset_id: str, *, offset: int = 0, limit: int = 100
+    ) -> list[tuple[int, int, ProcessedExample]]:
+        """Read full retained records by stable dataset ID, including trash."""
+        if offset < 0 or limit < 1:
+            raise ValueError("invalid row page")
+        record = self.get_by_id(dataset_id)
+        with catalog_connection(self._root) as connection:
+            pending = connection.execute(
+                "SELECT purge_pending FROM datasets WHERE id = ?", (dataset_id,)
+            ).fetchone()
+        if pending is None or pending[0]:
+            raise ValueError("dataset snapshot is unavailable")
+        if record.snapshot_format_version != 2:
+            raise ValueError(f"unsupported snapshot format: {record.snapshot_format_version}")
+        frame = pl.scan_parquet(self._root / record.parquet_path).slice(offset, limit).collect()
+        return [
+            (
+                ordinal,
+                row["source_index"],
+                ProcessedExample(
+                    conversation=[decode_message(item) for item in json.loads(row["conversation"])],
+                    expected_output=None
+                    if row["expected_output"] is None
+                    else json.loads(row["expected_output"]),
+                    extras=json.loads(row["extras"]),
+                    tools=json.loads(row["tools"]),
+                    segments={key: row[key] for key in record.segment_keys if row[key] is not None},
+                ),
+            )
+            for ordinal, row in enumerate(frame.iter_rows(named=True), start=offset)
+        ]
 
     def inference_rows(
         self, dataset_id: str, *, offset: int = 0, limit: int = 100

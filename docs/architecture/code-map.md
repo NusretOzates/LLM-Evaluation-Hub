@@ -41,3 +41,5 @@ The workbench has unit tests in `web/tests/` and real API/browser tests in `web/
 | Documentation checks | `scripts/check_docs.py` | `docs/` concepts and links | quality workflow |
 
 Trash lifecycle and tag deletion are owned by `core/datasets/catalog/repository.py` and `tags.py`, with catalog routes in `api/routes.py`. The workbench Trash route is `web/app/routes/trash.tsx`; shared dataset action controls live in `web/app/shared/dataset-menu.tsx`.
+
+Evaluation methods, scoring, persistence and execution live in `src/llm_evaluation_hub/evaluation/`; API routes are in `api/evaluation_routes.py`, shared constrained Python and rate limiting in `execution/`, and setup/report pages in `web/app/features/evaluation/`. Focused checks are in `tests/evaluation/`.

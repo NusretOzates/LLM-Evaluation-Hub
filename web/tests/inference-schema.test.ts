@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { strictReason, visualReason } from "../app/features/inference/output-editor";
+import { strictReason, visualReason } from "../app/shared/output-editor";
 
 test("visual editor preserves unsupported constructs and does not inspect enum data", () => {
   assert.match(

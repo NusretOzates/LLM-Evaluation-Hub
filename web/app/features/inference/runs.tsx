@@ -17,7 +17,7 @@ import {
   type RunSpec,
 } from "./api";
 import { message } from "./connections";
-import { OutputEditor } from "./output-editor";
+import { OutputEditor } from "../../shared/output-editor";
 
 export function Runs() {
   const [runs, setRuns] = useState<Run[]>([]);
@@ -563,6 +563,7 @@ export function RunDetail() {
         <Link to="/inference">Inference runs</Link>
         <h1>Run detail</h1>
         <StatusLabel status={run.state} />
+        {["completed", "canceled", "interrupted"].includes(run.state) && <Link className="control-button control-button-primary" to={`/evaluations/new?source=${encodeURIComponent(id)}`}>Evaluate results</Link>}
       </header>
       <ConfirmDialog
         open={confirmDelete}

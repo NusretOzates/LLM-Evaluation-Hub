@@ -83,3 +83,5 @@ Source and preview operations return pinned coordinates and safe row diagnostics
 
 
 Inference profiles, dataset output metadata, request preview and tests, runs, results, cancellation and resume are described in [Inference runs](inference.md). The routes and typed request/response models are in `api/inference_routes.py` and `inference/contracts.py`.
+
+Evaluation method metadata, definitions, preview, scoring tests, runs, summaries and results are served by `api/evaluation_routes.py`. See [Evaluation runs](evaluation.md) for scoring, coverage and retention semantics.

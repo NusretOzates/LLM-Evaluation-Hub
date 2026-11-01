@@ -415,7 +415,8 @@ def test_shared_limits_and_manual_recovery(tmp_path: Path, monkeypatch: pytest.M
     import time
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-    from llm_evaluation_hub.inference.runner import RateLimiter, Runner
+    from llm_evaluation_hub.execution.rate_limit import RateLimiter
+    from llm_evaluation_hub.inference.runner import Runner
 
     lock = threading.Lock()
     active = 0
@@ -530,7 +531,7 @@ def test_rate_limiter_counts_attempts_in_rolling_window(monkeypatch: pytest.Monk
     import asyncio
     from types import SimpleNamespace
 
-    import llm_evaluation_hub.inference.runner as runner_module
+    import llm_evaluation_hub.execution.rate_limit as runner_module
 
     current = 100.0
     waits = []

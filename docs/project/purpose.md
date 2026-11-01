@@ -21,6 +21,7 @@ The consumer is someone preparing or inspecting evaluation data on one machine. 
 - Attach datasets to a tag tree and list a tag together with the datasets under it.
 - Page through stored rows over HTTP and in the workbench.
 - Send stored conversations to a user-managed Chat Completions endpoint and retain results.
+- Evaluate saved responses using exact match or a structured LLM judge and inspect score coverage.
 
 ## Development policy
 
@@ -28,7 +29,7 @@ The app has no users and makes no backward-compatibility guarantees. Use one cur
 
 ## Out of scope
 
-- Hosting a model or running a judge or metric.
+- Hosting or training a model.
 - Editing a stored row after registration. A snapshot is written once.
 - Authentication. The API grants cross-origin access only to explicitly configured origins.
 

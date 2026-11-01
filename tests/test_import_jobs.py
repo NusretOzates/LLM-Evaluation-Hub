@@ -27,7 +27,7 @@ from llm_evaluation_hub.imports.contracts import (
     SourceSpec,
 )
 from llm_evaluation_hub.imports.jobs import ImportSupervisor
-from llm_evaluation_hub.imports.runtime import RUNTIME_VERSION, ProcessorError
+from llm_evaluation_hub.execution.python import RUNTIME_VERSION, ProcessorError
 
 CODE = (
     "def process(row):\n"

@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from polars.exceptions import PolarsError
 
+from llm_evaluation_hub.api.evaluation_routes import router as evaluation_router
 from llm_evaluation_hub.api.import_routes import import_validation_error
 from llm_evaluation_hub.api.import_routes import router as import_router
 from llm_evaluation_hub.api.inference_routes import router as inference_router
@@ -24,6 +25,8 @@ from llm_evaluation_hub.core.datasets.catalog import (
     UnknownTagError,
 )
 from llm_evaluation_hub.core.datasets.catalog.errors import DatasetInUseError
+from llm_evaluation_hub.evaluation.runner import EvaluationRunner
+from llm_evaluation_hub.evaluation.store import EvaluationStore
 from llm_evaluation_hub.imports.jobs import ImportSupervisor
 from llm_evaluation_hub.imports.previews import PreviewService
 from llm_evaluation_hub.imports.sources import SourceAdapter
@@ -43,6 +46,8 @@ def create_app(
     supervisor = ImportSupervisor(catalog_root, source_adapter=source_adapter)
     inference_store = InferenceStore(catalog_root)
     inference_runner = Runner(inference_store)
+    evaluation_store = EvaluationStore(catalog_root)
+    evaluation_runner = EvaluationRunner(evaluation_store, inference_runner.admission)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
@@ -51,13 +56,19 @@ def create_app(
         try:
             inference_runner.start()
             try:
-                yield
+                evaluation_runner.start()
+                try:
+                    yield
+                finally:
+                    evaluation_runner.stop()
             finally:
                 inference_runner.stop()
         finally:
             supervisor.stop()
 
     application = FastAPI(title="LLM Evaluation Hub", lifespan=lifespan)
+    application.state.evaluation_store = evaluation_store
+    application.state.evaluation_runner = evaluation_runner
     application.state.inference_store = inference_store
     application.state.inference_runner = inference_runner
     application.state.import_supervisor = supervisor
@@ -78,6 +89,7 @@ def create_app(
     application.include_router(router)
     application.include_router(import_router)
     application.include_router(inference_router)
+    application.include_router(evaluation_router)
     _register_errors(application)
     logger.info("Serving catalog at %s", catalog_root)
     return application

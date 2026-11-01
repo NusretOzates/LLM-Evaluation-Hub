@@ -12,7 +12,7 @@ from llm_evaluation_hub.core.datasets.catalog import DatasetRepository, ImportSt
 from llm_evaluation_hub.imports.contracts import PreviewRequest, SampleRequest, SourceSpec
 from llm_evaluation_hub.imports.jobs import ImportSupervisor
 from llm_evaluation_hub.imports.previews import PreviewService, SampleLookupError, execute_preview
-from llm_evaluation_hub.imports.runtime import ProcessorError
+from llm_evaluation_hub.execution.python import ProcessorError
 from llm_evaluation_hub.imports.sources import HuggingFaceAdapter, collect_sample
 
 CODE = """def process(row):

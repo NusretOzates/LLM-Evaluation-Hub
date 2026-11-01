@@ -9,8 +9,8 @@ from huggingface_hub import HfApi
 from huggingface_hub.utils import validate_repo_id
 
 from datasets import load_dataset
+from llm_evaluation_hub.execution.python import ProcessorError, validate_json_budget
 from llm_evaluation_hub.imports.contracts import SAMPLE_ROWS, SourceSpec
-from llm_evaluation_hub.imports.runtime import ProcessorError, validate_json_budget
 
 
 def _hub_source(source: SourceSpec) -> None:

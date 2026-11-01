@@ -22,17 +22,17 @@ from llm_evaluation_hub.core.datasets.processing import (
     validate_segment_declaration,
 )
 from llm_evaluation_hub.core.datasets.records import ProcessedExample
+from llm_evaluation_hub.execution.python import (
+    RUNTIME_VERSION,
+    ProcessorError,
+    validate_json_budget,
+)
 from llm_evaluation_hub.imports.contracts import (
     Diagnostic,
     ImportSpec,
     SampleRequest,
 )
-from llm_evaluation_hub.imports.runtime import (
-    RUNTIME_VERSION,
-    ProcessorError,
-    ProcessorRunner,
-    validate_json_budget,
-)
+from llm_evaluation_hub.imports.runtime import ProcessorRunner
 from llm_evaluation_hub.imports.sources import SourceAdapter
 from llm_evaluation_hub.inference.compiler import validate_format
 

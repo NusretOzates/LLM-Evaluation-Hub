@@ -209,6 +209,13 @@ class InferenceStore:
                 raise KeyError("run not found")
             if row["state"] not in {"completed", "canceled", "interrupted"}:
                 raise ValueError("Cancel the run and wait for it to stop before deleting it.")
+            dependency = db.execute(
+                "SELECT 1 FROM evaluation_runs WHERE source_inference_run_id = ? "
+                "AND state IN ('queued','running','interrupted','canceling') LIMIT 1",
+                (run_id,),
+            ).fetchone()
+            if dependency:
+                raise ValueError("run is required by an unfinished evaluation")
             db.execute("DELETE FROM inference_results WHERE run_id = ?", (run_id,))
             db.execute("DELETE FROM inference_run_datasets WHERE run_id = ?", (run_id,))
             db.execute("DELETE FROM inference_runs WHERE id = ?", (run_id,))

@@ -9,9 +9,9 @@ import { CatalogAlert } from "../../shared/feedback";
 import { Button } from "../../shared/controls";
 import { Dialog } from "../../shared/dialog";
 import { defaultOutput, type Output } from "../inference/api";
-import { OutputEditor } from "../inference/output-editor";
+import { OutputEditor } from "../../shared/output-editor";
 import type { DatasetPreview, ImportLimits, SourceCoordinates, SourceSample } from "./contracts";
-import { ProcessorEditor } from "./processor-editor";
+import { PythonEditor } from "../../shared/python-editor";
 import { getImport, getImportSources, loadSourceSample, runDatasetPreview, submitImport } from "./transport";
 import type { Route } from "./+types/new";
 
@@ -672,7 +672,7 @@ export default function NewDatasetImport({ loaderData }: Route.ComponentProps) {
                     </div>
                   </details>
                 </div>
-                <ProcessorEditor diagnosticLine={diagnosticLine} onChange={updateCode} value={draft.code} />
+                <PythonEditor diagnosticLine={diagnosticLine} onChange={updateCode} value={draft.code} />
               </div>
             </div>
             <div className="processor-actions">

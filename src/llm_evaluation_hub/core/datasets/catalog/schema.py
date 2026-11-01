@@ -5,7 +5,7 @@ from pathlib import Path
 
 from llm_evaluation_hub.core.datasets.catalog.storage import catalog_connection, catalog_lock
 
-CATALOG_SCHEMA_VERSION = 5
+CATALOG_SCHEMA_VERSION = 6
 
 _SCHEMA = """
 CREATE TABLE tags (
@@ -97,6 +97,41 @@ CREATE TABLE inference_results (
 """
 
 
+_EVALUATION_SCHEMA = """
+CREATE TABLE evaluation_definitions (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL, settings TEXT NOT NULL,
+    created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE TABLE evaluation_runs (
+    id TEXT PRIMARY KEY, source_inference_run_id TEXT NOT NULL,
+    state TEXT NOT NULL, settings TEXT NOT NULL, total INTEGER NOT NULL,
+    created_at TEXT NOT NULL, updated_at TEXT NOT NULL, error TEXT
+);
+CREATE INDEX evaluation_source_dependency ON evaluation_runs(source_inference_run_id, state);
+CREATE TABLE evaluation_run_datasets (
+    run_id TEXT NOT NULL REFERENCES evaluation_runs(id), dataset_id TEXT NOT NULL,
+    name TEXT NOT NULL, snapshot_path TEXT NOT NULL, snapshot_format_version INTEGER NOT NULL,
+    rows_kept INTEGER NOT NULL, tags TEXT NOT NULL, PRIMARY KEY(run_id, dataset_id)
+);
+CREATE INDEX evaluation_dataset_dependency ON evaluation_run_datasets(dataset_id, run_id);
+CREATE TABLE evaluation_inputs (
+    run_id TEXT NOT NULL, dataset_id TEXT NOT NULL, ordinal INTEGER NOT NULL,
+    source_index INTEGER NOT NULL, source_result_present INTEGER NOT NULL,
+    source_status TEXT, segments TEXT NOT NULL,
+    PRIMARY KEY(run_id, dataset_id, ordinal),
+    FOREIGN KEY(run_id, dataset_id) REFERENCES evaluation_run_datasets(run_id, dataset_id)
+);
+CREATE TABLE evaluation_results (
+    run_id TEXT NOT NULL, dataset_id TEXT NOT NULL, ordinal INTEGER NOT NULL,
+    status TEXT NOT NULL, stage TEXT NOT NULL, result TEXT, scores TEXT, evidence TEXT,
+    error TEXT, elapsed_ms REAL, attempts INTEGER NOT NULL DEFAULT 0, usage TEXT,
+    PRIMARY KEY(run_id, dataset_id, ordinal),
+    FOREIGN KEY(run_id, dataset_id, ordinal)
+        REFERENCES evaluation_inputs(run_id, dataset_id, ordinal)
+);
+"""
+
+
 def _create_schema(connection: sqlite3.Connection) -> None:
     """Initialize an empty database or accept the current format unchanged."""
     version = connection.execute("PRAGMA user_version").fetchone()[0]
@@ -114,6 +149,7 @@ def _create_schema(connection: sqlite3.Connection) -> None:
     connection.executescript(_SCHEMA)
     connection.executescript(_IMPORT_SCHEMA)
     connection.executescript(_INFERENCE_SCHEMA)
+    connection.executescript(_EVALUATION_SCHEMA)
     connection.execute(f"PRAGMA user_version = {CATALOG_SCHEMA_VERSION}")
 
 

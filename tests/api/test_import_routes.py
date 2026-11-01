@@ -16,7 +16,7 @@ from llm_evaluation_hub.core.datasets.records import JsonValue, ProcessedExample
 from llm_evaluation_hub.imports.contracts import SampleRequest, SourceSpec
 from llm_evaluation_hub.imports.jobs import ImportSupervisor
 from llm_evaluation_hub.imports.previews import PreviewService
-from llm_evaluation_hub.imports.runtime import RUNTIME_VERSION, ProcessorError
+from llm_evaluation_hub.execution.python import RUNTIME_VERSION, ProcessorError
 from llm_evaluation_hub.imports.worker import validated_spec
 
 CODE = """def process(row):

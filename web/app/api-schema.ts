@@ -20,6 +20,12 @@ export type ConnectionProfile = {
   "max_tokens_field"?: "max_completion_tokens" | "max_tokens";
 };
 
+export type CreateEvaluation = {
+  "source_inference_run_id": string;
+  "dataset_ids": Array<string>;
+  "definition": Definition;
+};
+
 export type CreateImportRequest = {
   "preview_id": string;
   "name": string;
@@ -47,6 +53,16 @@ export type DatasetView = {
   "tags": Array<string>;
 };
 
+export type Definition = {
+  "name": string;
+  "method_id": string;
+  "method_config"?: { [key: string]: unknown };
+  "preprocess_source"?: string | null;
+  "scoring_source": string;
+  "metrics": Array<Metric>;
+  "concurrency"?: number;
+};
+
 export type Diagnostic = {
   "category": string;
   "message": string;
@@ -61,6 +77,11 @@ export type ExamplePage = {
   "offset": number;
   "limit": number;
   "examples": Array<ProcessedExample>;
+};
+
+export type FieldCatalogRequest = {
+  "source_inference_run_id": string;
+  "dataset_ids": Array<string>;
 };
 
 export type FrozenDataset = {
@@ -159,6 +180,22 @@ export type MediaPart = {
   "type": "image" | "video" | "audio";
   "url"?: string | null;
   "path"?: string | null;
+};
+
+export type MethodTest = {
+  "source_inference_run_id": string;
+  "dataset_id": string;
+  "ordinal": number;
+  "method_id": string;
+  "method_config"?: { [key: string]: unknown };
+  "preprocess_source"?: string | null;
+};
+
+export type Metric = {
+  "name": string;
+  "minimum"?: number | null;
+  "maximum"?: number | null;
+  "direction"?: "higher" | "lower";
 };
 
 export type OutputFormat_Input = {
@@ -270,6 +307,12 @@ export type SampleView = {
   "rows": Array<{ [key: string]: JsonValue_Output }>;
   "columns": Array<SourceColumn>;
   "expires_at": string;
+};
+
+export type ScoringTest = {
+  "result": { [key: string]: unknown };
+  "scoring_source": string;
+  "result_schema": { [key: string]: unknown };
 };
 
 export type SourceChoice = {

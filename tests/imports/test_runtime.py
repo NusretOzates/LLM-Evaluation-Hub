@@ -8,11 +8,8 @@ from time import perf_counter
 
 import pytest
 
-from llm_evaluation_hub.imports.runtime import (
-    ProcessorError,
-    ProcessorRunner,
-    validate_json_budget,
-)
+from llm_evaluation_hub.execution.python import ProcessorError, validate_json_budget
+from llm_evaluation_hub.imports.runtime import ProcessorRunner
 
 GOOD = """def process(row):
     return {"conversation": [{"role": "user", "content": row["text"]}],
@@ -201,7 +198,7 @@ def test_binary_override_is_ignored(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_worker_death_is_replaced() -> None:
     from pydantic_monty import Monty
 
-    from llm_evaluation_hub.imports.runtime import _bundled_binary
+    from llm_evaluation_hub.execution.python import _bundled_binary
 
     with Monty(
         binary_path=_bundled_binary(), min_processes=1, max_processes=1, request_timeout=3

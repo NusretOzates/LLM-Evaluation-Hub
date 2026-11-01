@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router";
 import { Button } from "../../shared/controls";
 import { api, type Output } from "./api";
 import { message } from "./connections";
-import { OutputEditor } from "./output-editor";
+import { OutputEditor } from "../../shared/output-editor";
 export default function DatasetOutput() {
   const { id = "" } = useParams();
   const [output, setOutput] = useState<Output | null>(null);

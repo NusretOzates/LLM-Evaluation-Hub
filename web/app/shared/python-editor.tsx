@@ -6,7 +6,7 @@ import { keymap, lineNumbers } from "@codemirror/view";
 import { EditorView, Decoration, type DecorationSet } from "@codemirror/view";
 import { useEffect, useRef } from "react";
 import { tags } from "@lezer/highlight";
-import { useTheme } from "../../shared/theme";
+import { useTheme } from "./theme";
 
 const themeExtension = (dark: boolean) => [
   EditorView.theme(
@@ -49,11 +49,13 @@ const diagnostics = StateField.define<DecorationSet>({
   provide: (field) => EditorView.decorations.from(field),
 });
 
-export function ProcessorEditor({
+export function PythonEditor({
+  label = "Python processor",
   value,
   diagnosticLine,
   onChange,
 }: {
+  label?: string;
   value: string;
   diagnosticLine: number | null;
   onChange: (value: string) => void;
@@ -65,6 +67,7 @@ export function ProcessorEditor({
   const view = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
   const initialDocument = useRef(value);
+  const initialLabel = useRef(label);
   onChangeRef.current = onChange;
 
   useEffect(() => {
@@ -74,7 +77,7 @@ export function ProcessorEditor({
       doc: initialDocument.current,
       extensions: [
         lineNumbers(),
-        EditorView.contentAttributes.of({ "aria-label": "Python processor" }),
+        EditorView.contentAttributes.of({ "aria-label": initialLabel.current }),
         history(),
         python(),
         theme.current.of(themeExtension(initialTheme.current === "dark")),

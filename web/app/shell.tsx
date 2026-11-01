@@ -4,6 +4,7 @@ import { useTheme, type ThemePreference } from "./shared/theme";
 import {
   Cable,
   PlayCircle,
+  ClipboardCheck,
   Database,
   FilePlus2,
   PanelLeftClose,
@@ -137,6 +138,10 @@ function Navigation({ count, collapsed, onNavigate }: { count: number; collapsed
       >
         <PlayCircle aria-hidden="true" size={16} />
         <span className="nav-label">Inference runs</span>
+      </NavLink>
+      <NavLink className="nav-link" title={collapsed ? "Evaluations" : undefined} to="/evaluations" onClick={onNavigate}>
+        <ClipboardCheck aria-hidden="true" size={16} />
+        <span className="nav-label">Evaluations</span>
       </NavLink>
       <NavLink className="nav-link" title={collapsed ? "Datasets" : undefined} to="/datasets" onClick={onNavigate}>
         <Database aria-hidden="true" size={16} />

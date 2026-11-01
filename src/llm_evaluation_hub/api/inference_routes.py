@@ -174,7 +174,10 @@ def cancel(run_id: str, request: Request) -> None:
 @input_errors
 def resume(run_id: str, request: Request) -> None:
     """Explicitly resume interrupted work."""
-    request.app.state.inference_runner.resume(run_id)
+    try:
+        request.app.state.inference_runner.resume(run_id)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from None
 
 
 @router.post("/inference/test")
@@ -184,7 +187,7 @@ async def test_example(body: InferenceExampleRequest, request: Request) -> RowRe
 
     from openai import AsyncOpenAI
 
-    from llm_evaluation_hub.inference.runner import RateLimiter
+    from llm_evaluation_hub.execution.rate_limit import RateLimiter
     from llm_evaluation_hub.inference.transport import AuthenticationFailure, send
 
     runner = request.app.state.inference_runner

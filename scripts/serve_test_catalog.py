@@ -59,6 +59,59 @@ def main() -> None:
             segments=["group"],
             limit=1,
         )
+        if os.environ.get("WORKBENCH_TEST_EVALUATION") == "1":
+            import json
+
+            from llm_evaluation_hub.core.datasets.catalog.storage import catalog_connection
+            from llm_evaluation_hub.inference.store import now
+
+            fixture = repo.register(
+                "Evaluation demo",
+                FixtureSource(),
+                processor,
+                processor_id="tests.evaluation",
+                segments=["group"],
+                limit=10,
+            )
+            timestamp = now()
+            with catalog_connection(root) as db:
+                db.execute(
+                    "INSERT INTO inference_runs VALUES (?, 'completed', ?, ?, '{}', 10, NULL)",
+                    ("evaluation-demo", timestamp, timestamp),
+                )
+                db.execute(
+                    "INSERT INTO inference_run_datasets VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        "evaluation-demo",
+                        fixture.id,
+                        fixture.name,
+                        fixture.parquet_path,
+                        10,
+                        '{"kind":"text","schema":null,"strict":true}',
+                        fixture.snapshot_format_version,
+                    ),
+                )
+                for ordinal in range(10):
+                    payload = {
+                        "dataset_id": fixture.id,
+                        "ordinal": ordinal,
+                        "source_index": ordinal,
+                        "status": "ok",
+                        "content": json.dumps({"index": ordinal}),
+                        "parsed": {"index": ordinal},
+                        "tool_calls": None,
+                        "raw_response": None,
+                        "validation_errors": [],
+                        "finish_reason": "stop",
+                        "usage": None,
+                        "latency_ms": 0,
+                        "attempts": 1,
+                        "error": None,
+                    }
+                    db.execute(
+                        "INSERT INTO inference_results VALUES (?, ?, ?, ?)",
+                        ("evaluation-demo", fixture.id, ordinal, json.dumps(payload)),
+                    )
         if os.environ.get("WORKBENCH_TEST_ACCEPTANCE") == "1":
             repo.create_tag("Benchmarks")
             repo.create_tag("Reasoning", parent="Benchmarks")

@@ -7,13 +7,12 @@ import contextlib
 import fcntl
 import os
 import threading
-import time
-from collections import deque
 from typing import Any
 
 from openai import AsyncOpenAI
 
 from llm_evaluation_hub.core.datasets.catalog.storage import catalog_connection
+from llm_evaluation_hub.execution.rate_limit import RateLimiter
 from llm_evaluation_hub.inference.compiler import compile_request
 from llm_evaluation_hub.inference.contracts import (
     ConnectionProfile,
@@ -137,6 +136,14 @@ class Runner:
     def resume(self, run_id: str) -> None:
         """Queue interrupted work, retaining committed results."""
         with catalog_connection(self.store.root) as db:
+            db.execute("BEGIN IMMEDIATE")
+            dependency = db.execute(
+                "SELECT 1 FROM evaluation_runs WHERE source_inference_run_id = ? "
+                "AND state IN ('queued','running','interrupted','canceling') LIMIT 1",
+                (run_id,),
+            ).fetchone()
+            if dependency:
+                raise ValueError("run is required by an unfinished evaluation")
             changed = db.execute(
                 "UPDATE inference_runs SET state = 'queued', error = NULL, "
                 "updated_at = ? WHERE id = ? AND state = 'interrupted'",
@@ -288,25 +295,3 @@ class Runner:
                     "INSERT OR IGNORE INTO inference_results VALUES (?, ?, ?, ?)",
                     (run_id, dataset_id, ordinal, result.model_dump_json()),
                 )
-
-
-class RateLimiter:
-    """Sliding-window attempt limiter shared by all rows."""
-
-    def __init__(self, rpm: int) -> None:
-        """Configure the rolling request limit."""
-        self.rpm = rpm
-        self.times: deque[float] = deque()
-        self.lock = asyncio.Lock()
-
-    async def acquire(self) -> None:
-        """Count an attempt before sending it."""
-        async with self.lock:
-            while True:
-                now_time = time.monotonic()
-                while self.times and self.times[0] <= now_time - 60:
-                    self.times.popleft()
-                if len(self.times) < self.rpm:
-                    self.times.append(now_time)
-                    return
-                await asyncio.sleep(max(0, self.times[0] + 60 - now_time))

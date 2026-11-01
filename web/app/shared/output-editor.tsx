@@ -1,8 +1,8 @@
 import { Trash2 } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import type { JsonValue } from "../../catalog-types";
-import { Button } from "../../shared/controls";
-import type { Output } from "./api";
+import type { JsonValue } from "../catalog-types";
+import { Button } from "./controls";
+import type { Output } from "../features/inference/api";
 
 type Schema = Record<string, JsonValue>;
 const isObject = (value: unknown): value is Schema =>
@@ -62,10 +62,12 @@ export function OutputEditor({
   value,
   onChange,
   onValidityChange,
+  schemaOnly = false,
 }: {
   value: Output;
   onChange: (v: Output) => void;
   onValidityChange?: (valid: boolean) => void;
+  schemaOnly?: boolean;
 }) {
   const [tab, setTab] = useState<"visual" | "json">("visual");
   const [text, setText] = useState(() => JSON.stringify(value.schema ?? initialSchema, null, 2));
@@ -117,30 +119,33 @@ export function OutputEditor({
   }
   return (
     <div className="output-editor">
-      <label className="output-kind" htmlFor={`${id}-kind`}>
-        Output format
-        <select
-          id={`${id}-kind`}
-          value={value.kind}
-          onChange={(e) =>
-            onChange({
-              ...value,
-              kind: e.target.value as Output["kind"],
-              schema: e.target.value === "json_schema" ? schema : value.schema,
-            })
-          }
-        >
-          <option value="text">Text</option>
-          <option value="json_object">JSON object</option>
-          <option value="json_schema">JSON Schema</option>
-        </select>
-      </label>
+      {!schemaOnly && (
+        <label className="output-kind" htmlFor={`${id}-kind`}>
+          Output format
+          <select
+            id={`${id}-kind`}
+            value={value.kind}
+            onChange={(e) =>
+              onChange({
+                ...value,
+                kind: e.target.value as Output["kind"],
+                schema: e.target.value === "json_schema" ? schema : value.schema,
+              })
+            }
+          >
+            <option value="text">Text</option>
+            <option value="json_object">JSON object</option>
+            <option value="json_schema">JSON Schema</option>
+          </select>
+        </label>
+      )}
       {value.kind === "json_schema" && (
         <>
           <label className="check">
             <input
               type="checkbox"
               checked={value.strict}
+              disabled={schemaOnly}
               onChange={(e) => onChange({ ...value, strict: e.target.checked })}
             />{" "}
             Strict mode

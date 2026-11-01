@@ -28,7 +28,7 @@ from llm_evaluation_hub.imports.contracts import (
 )
 from llm_evaluation_hub.imports.jobs import ImportSupervisor, OperationError, validated_spec
 from llm_evaluation_hub.imports.previews import PreviewService, SampleLookupError
-from llm_evaluation_hub.imports.runtime import ProcessorError
+from llm_evaluation_hub.execution.python import ProcessorError
 
 router = APIRouter()
 _IMPORT_PATHS = ("/dataset-source-samples", "/dataset-previews", "/dataset-imports")

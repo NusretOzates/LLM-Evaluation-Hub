@@ -24,8 +24,8 @@ from llm_evaluation_hub.core.datasets.catalog import (
 )
 from llm_evaluation_hub.core.datasets.processing import ProcessResult
 from llm_evaluation_hub.core.datasets.sources import SourceDescriptor
+from llm_evaluation_hub.execution.python import ProcessorError
 from llm_evaluation_hub.imports.contracts import ImportSpec, JobView
-from llm_evaluation_hub.imports.runtime import ProcessorError
 from llm_evaluation_hub.imports.sources import HuggingFaceAdapter, SourceAdapter
 from llm_evaluation_hub.imports.worker import diagnostic, validated_spec, worker_main
 

@@ -3,6 +3,9 @@ import { index, route, type RouteConfig } from "@react-router/dev/routes";
 export default [
   index("routes/home.tsx"),
   route("connections", "features/inference/connections.tsx"),
+  route("evaluations", "features/evaluation/list.tsx"),
+  route("evaluations/new", "features/evaluation/new.tsx"),
+  route("evaluations/:id", "features/evaluation/detail.tsx"),
   route("inference", "features/inference/runs-list.tsx"),
   route("inference/new", "features/inference/run-new.tsx"),
   route("inference/runs/:id", "features/inference/run-detail.tsx"),
